@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0a1628">
+    <title>1944 Profiterol | Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Playfair+Display:wght@900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0a1628; --bg-card: #132240; --accent: #e8b930;
+            --text-main: #e8edf4; --text-muted: #7e93b0; --border-color: rgba(255,255,255,0.08);
+            --radius-lg: 16px; --transition: all 0.2s ease;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); color: var(--text-main); overflow-x: hidden; }
+
+        .app-container { max-width: 600px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; position: relative; padding-bottom: 80px; }
+        .main-header { position: sticky; top: 0; z-index: 100; background: var(--bg-main); padding: 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .brand-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 900; color: var(--accent); }
+
+        .tables-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 16px; }
+        .table-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 12px; cursor: pointer; transition: var(--transition); display: flex; flex-direction: column; justify-content: space-between; min-height: 100px; }
+        .table-card:active { transform: scale(0.95); }
+        .table-card.occupied { border-color: #ff6b6b; box-shadow: 0 0 10px rgba(255,107,107,0.1); }
+        .table-id { font-weight: 800; font-size: 16px; display: flex; justify-content: space-between; }
+        .table-total { font-weight: 700; color: var(--accent); font-size: 15px; }
+
+        .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 600px; background: var(--bg-card); border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; padding: 12px 0 24px; z-index: 100; border-radius: 20px 20px 0 0; }
+        .nav-item { background: none; border: none; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; font-size: 11px; font-weight: 600; }
+        .nav-item.active { color: var(--accent); }
+
+        /* Modal Style */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); display: flex; align-items: flex-end; z-index: 1000; }
+        .modal-content { background: var(--bg-card); width: 100%; max-width: 600px; margin: 0 auto; border-radius: 24px 24px 0 0; padding: 24px; animation: slideUp 0.3s ease; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .btn { padding: 12px 20px; border-radius: 12px; border: none; font-weight: 700; cursor: pointer; transition: var(--transition); }
+        .btn-primary { background: var(--accent); color: #000; }
+        .btn-secondary { background: rgba(255,255,255,0.05); color: var(--text-main); border: 1px solid var(--border-color); }
+
+        /* Sync Indicator */
+        .sync-status { position: fixed; top: 10px; right: 10px; font-size: 10px; color: var(--text-muted); opacity: 0.6; z-index: 1001; transition: opacity 0.3s ease; }
+        .sync-status.flash { opacity: 1; color: var(--accent); }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+const SUPABASE_URL = 'https://fwyamxlgkwzbzogxqlkw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ3eWFteGxna3d6YnpvZ3hxbGt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MTMzMjQsImV4cCI6MjA4OTI4OTMyNH0.tK4K1UqY9uIOpFqblGNWU6_j5CFhqN-GrhrWL9N0zGA';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Bu cihazın benzersiz kimliği — kendi yazdığımız değişikliği realtime'dan tekrar almamak için
+const DEVICE_ID = (() => {
+    let id = localStorage.getItem('p1944_device_id');
+    if (!id) {
+        id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem('p1944_device_id', id);
+    }
+    return id;
+})();
+
+// ─── LOCAL STORAGE HELPER (The Speed Key) ───
+const Storage = {
+    save: (key, data) => {
+        try {
+            localStorage.setItem(`p1944_${key}`, JSON.stringify(data));
+        } catch (e) {
+            console.warn('Storage save failed:', e);
+        }
+    },
+    get: (key) => {
+        try {
+            const v = localStorage.getItem(`p1944_${key}`);
+            return v ? JSON.parse(v) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+};
+
+const ApiService = {
+    async getMenu() {
+        const { data } = await sb.from('menu').select('*').order('id');
+        return data || [];
+    },
+    async getTablesState() {
+        const { data } = await sb.from('tables_state').select('data').eq('id', 'main').single();
+        return data?.data || {};
+    },
+    async saveTablesState(state) {
+        await sb.from('tables_state').upsert({
+            id: 'main',
+            data: state,
+            updated_at: new Date().toISOString(),
+            updated_by: DEVICE_ID
+        }, { onConflict: 'id' });
+    }
+};
+
+function App() {
+    const [view, setView] = useState('tables');
+    const [tables, setTables] = useState({});
+    const [menu, setMenu] = useState([]);
+    const [syncState, setSyncState] = useState('idle'); // idle | syncing | offline | updated
+    const [selectedTable, setSelectedTable] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    // Tables state'in en son halini Realtime callback'inden erişebilmek için ref
+    const tablesRef = useRef(tables);
+    useEffect(() => { tablesRef.current = tables; }, [tables]);
+
+    // ─── INSTANT LOAD ───
+    useEffect(() => {
+        // 1. Önce LocalStorage'dan verileri çek (Sıfır bekleme)
+        const cachedTables = Storage.get('tables') || {};
+        const cachedMenu = Storage.get('menu') || [];
+        setTables(cachedTables);
+        setMenu(cachedMenu);
+
+        // 2. Ardından arka planda Supabase ile senkronize et
+        syncWithCloud();
+
+        // 3. Realtime aboneliği — başka cihazdan değişiklik olursa anında güncelle
+        const channel = sb
+            .channel('tables_state_changes')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'tables_state', filter: 'id=eq.main' },
+                (payload) => {
+                    const newData = payload.new?.data;
+                    const updatedBy = payload.new?.updated_by;
+
+                    // Kendi yazdığımız değişikliği yoksay
+                    if (updatedBy === DEVICE_ID) return;
+
+                    if (newData) {
+                        setTables(newData);
+                        Storage.save('tables', newData);
+                        flashSyncStatus('updated');
+                    }
+                }
+            )
+            .subscribe();
+
+        // Online/offline event listener
+        const handleOnline = () => { setSyncState('idle'); syncWithCloud(); };
+        const handleOffline = () => setSyncState('offline');
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        if (!navigator.onLine) setSyncState('offline');
+
+        return () => {
+            sb.removeChannel(channel);
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
+
+    function flashSyncStatus(state) {
+        setSyncState(state);
+        setTimeout(() => setSyncState('idle'), 1500);
+    }
+
+    async function syncWithCloud() {
+        if (!navigator.onLine) {
+            setSyncState('offline');
+            return;
+        }
+        setSyncState('syncing');
+        try {
+            const [freshMenu, freshTables] = await Promise.all([
+                ApiService.getMenu(),
+                ApiService.getTablesState()
+            ]);
+
+            if (JSON.stringify(freshMenu) !== JSON.stringify(menu)) {
+                setMenu(freshMenu);
+                Storage.save('menu', freshMenu);
+            }
+            if (JSON.stringify(freshTables) !== JSON.stringify(tablesRef.current)) {
+                setTables(freshTables);
+                Storage.save('tables', freshTables);
+            }
+            setSyncState('idle');
+        } catch (e) {
+            console.log("Cloud senkronizasyon hatası, cache ile devam ediliyor.");
+            setSyncState('offline');
+        }
+    }
+
+    const updateTable = useCallback(async (id, newState) => {
+        const updatedTables = { ...tablesRef.current, [id]: newState };
+        setTables(updatedTables);
+        Storage.save('tables', updatedTables); // Hemen cache'le
+        try {
+            await ApiService.saveTablesState(updatedTables); // Sonra buluta gönder
+        } catch (e) {
+            console.log('Bulut yazma başarısız, internet gelince tekrar denenecek.');
+            setSyncState('offline');
+        }
+    }, []);
+
+    const syncLabel = {
+        idle: '✅ Güncel',
+        syncing: '🔄 Senkronize ediliyor...',
+        offline: '📴 Çevrimdışı',
+        updated: '🔔 Yeni sipariş'
+    }[syncState];
+
+    return (
+        <div className="app-container">
+            <div className={`sync-status ${syncState === 'updated' ? 'flash' : ''}`}>{syncLabel}</div>
+
+            <header className="main-header">
+                <div className="brand-title">1944 PROFİTEROL</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    {new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+            </header>
+
+            <main style={{ flex: 1 }}>
+                {view === 'tables' && (
+                    <div className="tables-grid">
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(id => (
+                            <div
+                                key={id}
+                                className={`table-card ${tables[id]?.orders?.length > 0 ? 'occupied' : ''}`}
+                                onClick={() => { setSelectedTable(id); setIsModalOpen(true); }}
+                            >
+                                <div className="table-id"><span>Masa {id}</span></div>
+                                <div className="table-total">
+                                    {tables[id]?.orders?.length > 0
+                                        ? `₺${tables[id].orders.reduce((s,o)=>s+o.price*o.qty,0).toLocaleString('tr-TR')}`
+                                        : 'Boş'}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {view !== 'tables' && <div style={{padding:20, textAlign:'center', color:'var(--text-muted)'}}>Bu ekran yakında eklenecek.</div>}
+            </main>
+
+            {isModalOpen && (
+                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
+                    <div className="modal-content">
+                        <h2 style={{marginBottom:20}}>Masa {selectedTable}</h2>
+                        <div style={{display:'flex', gap:10, flexWrap:'wrap', marginBottom:20}}>
+                            {menu.slice(0,10).map(item => (
+                                <button
+                                    key={item.id}
+                                    className="btn-secondary"
+                                    style={{padding:'8px', fontSize:'12px'}}
+                                    onClick={() => {
+                                        const current = tablesRef.current[selectedTable]?.orders || [];
+                                        const exist = current.find(o => o.mid === item.id);
+                                        const next = exist
+                                            ? current.map(o => o.mid === item.id ? {...o, qty: o.qty + 1} : o)
+                                            : [...current, { mid: item.id, name: item.name, price: item.price, qty: 1 }];
+                                        updateTable(selectedTable, { orders: next, status: 'occupied' });
+                                    }}
+                                >
+                                    + {item.name}
+                                </button>
+                            ))}
+                        </div>
+                        <button className="btn btn-primary" style={{width:'100%'}} onClick={() => setIsModalOpen(false)}>Kapat</button>
+                    </div>
+                </div>
+            )}
+
+            <nav className="bottom-nav">
+                <button className={`nav-item ${view === 'tables' ? 'active' : ''}`} onClick={() => setView('tables')}><span>⊞</span>Masalar</button>
+                <button className={`nav-item ${view === 'orders' ? 'active' : ''}`} onClick={() => setView('orders')}><span>🍴</span>Siparişler</button>
+                <button className={`nav-item ${view === 'reports' ? 'active' : ''}`} onClick={() => setView('reports')}><span>📊</span>Raporlar</button>
+                <button className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => setView('settings')}><span>⚙️</span>Ayarlar</button>
+            </nav>
+        </div >
+    );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
