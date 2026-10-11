@@ -126,7 +126,9 @@ Telefondan açılan yönetici ekranında iki sekme vardır:
 - **Özet**
   - Tarih seçilir (‹ › okları ya da tarihe dokunarak). Genel tamamlama oranı, kayıt gönderen ve "Kayıt yok" sayıları görünür.
   - **Son 7 günün** tamamlanma grafiği vardır; bir güne dokunarak o güne geçilir.
-  - Personel kartına dokununca o günün görev listesi (✓/✗) ve notu açılır. Kayıt göndermeyenler listenin en üstünde yer alır.
+  - **Kişiye göre** görünümü: her kişinin kaç görevi eksik olduğu görünür. Karta dokununca o günün görev listesi (✓/✗) ve notu açılır. Kayıt göndermeyenler en üstte yer alır; bugün için yapmaları gereken görevler ⏳ ile listelenir.
+  - **Göreve göre** görünümü: her görevin altında kim yaptı (✓), kim yapmadı (✗) ve kimden kayıt bekleniyor (⏳).
+  - **Sadece yapılmayanlar** anahtarı açılınca yalnızca eksik kalan görevler ve kişiler gösterilir.
 - **Görevler**
   - Tüm görevler kategori ve Sıra'ya göre listelenir. Kişiye göre filtrelenebilir; pasif görevler isteğe bağlı gösterilir.
   - **Yeni Görev** ile görev eklenir. Bir göreve dokunarak ad, kategori, sıra, aktiflik ve **kime atanacağı** ("Herkes" ya da seçili kişiler) değiştirilir veya görev silinir.
@@ -198,6 +200,8 @@ Telefondan açılan yönetici ekranında iki sekme vardır:
 ### Yönetici paneli
 - [ ] **Görev Takip > Yönetici Linki Oluştur** ile üretilen link açılınca "Yönetici Paneli" ekranı gelir. `?y=` değeri değiştirilince "Geçersiz yönetici bağlantısı" ekranı çıkar.
 - [ ] Bir personelin `?k=` kodu, `?y=` olarak denenince panel **açılmaz**.
+- [ ] Özet > **Göreve göre** görünümünde her görevin altında kimin yaptığı (✓), kimin yapmadığı (✗) ve bugün henüz kayıt göndermeyenler (⏳) listelenir. **Sadece yapılmayanlar** açılınca tamamen bitmiş görevler ve kişiler gizlenir.
+- [ ] Bugün kayıt göndermeyen kişinin kartı açılınca o gün yapması gereken görevler ⏳ ile görünür.
 - [ ] Özet sekmesinde tarih değiştirilince rakamlar ve grafik güncellenir. Kayıt göndermeyen kişi "Kayıt yok" olarak üstte görünür.
 - [ ] Yeni görev sadece bir kişiye atanınca yalnızca o kişinin ekranında görünür, diğerinde görünmez. Gorevler sayfasının C sütununa kişinin adı yazılır.
 - [ ] Aynı kategoride aynı adla ikinci görev eklenmek istenince uyarı çıkar.

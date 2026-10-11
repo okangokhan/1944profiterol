@@ -1129,11 +1129,17 @@ function yoneticiOzetGetir(yKod, gun) {
     const secilen = Utilities.parseDate(gun, CONFIG.SAAT_DILIMI, 'yyyy-MM-dd');
     const veriler = kayitlariOku_();
 
+    const bugunMu = gun === gunAnahtari_();
     const liste = gunOzeti_(gun, veriler).map(function (o) {
+      // Bugün henüz kayıt göndermeyenlerin atanmış görevleri "bekliyor" olarak gösterilir.
+      // Geçmiş günlerde atamalar değişmiş olabileceği için tahmin yapılmaz.
+      const bekleyen = (o.kayitYok && bugunMu)
+        ? atanmisGorevler_({ kod: o.kod, ad: o.ad }, false).map(function (g) { return { ad: g.ad, kategori: g.kategori }; })
+        : [];
       return {
         kod: o.kod, ad: o.ad, tamam: o.tamam, toplam: o.toplam, not: o.not,
         son: o.son ? Utilities.formatDate(o.son, CONFIG.SAAT_DILIMI, 'HH:mm') : null,
-        kayitYok: !!o.kayitYok, gorevler: o.gorevler
+        kayitYok: !!o.kayitYok, gorevler: o.gorevler, bekleyen: bekleyen
       };
     });
 
