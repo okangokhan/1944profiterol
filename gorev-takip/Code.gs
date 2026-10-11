@@ -43,7 +43,7 @@ const CONFIG = Object.freeze({
     PERSONEL: ['Kod', 'Ad Soyad', 'Aktif', 'Kişisel Link'],
     GOREVLER: ['Görev Adı', 'Kategori', 'Atanan Personel', 'Aktif', 'Sıra'],
     KAYITLAR: ['Zaman Damgası', 'Tarih', 'Personel Kodu', 'Personel Adı',
-               'Görev Adı', 'Kategori', 'Durum', 'Not']
+               'Görev Adı', 'Kategori', 'Durum', 'Not', 'Tamamlayan']
   }),
 
   // Sütun indeksleri (0 tabanlı; getValues() dizisindeki konum)
@@ -51,10 +51,11 @@ const CONFIG = Object.freeze({
     PERSONEL: Object.freeze({ KOD: 0, AD: 1, AKTIF: 2, LINK: 3 }),
     GOREVLER: Object.freeze({ AD: 0, KATEGORI: 1, ATANAN: 2, AKTIF: 3, SIRA: 4 }),
     KAYITLAR: Object.freeze({ ZAMAN: 0, TARIH: 1, KOD: 2, AD: 3, GOREV: 4,
-                              KATEGORI: 5, DURUM: 6, NOT: 7 })
+                              KATEGORI: 5, DURUM: 6, NOT: 7, TAMAMLAYAN: 8 })
   }),
 
-  DURUM: Object.freeze({ TAMAM: 'Tamamlandı', YAPILMADI: 'Yapılmadı' }),
+  // Görevler ORTAKTIR: biri yapınca aynı görev diğer atananlarda "Başkası Yaptı" olur.
+  DURUM: Object.freeze({ TAMAM: 'Tamamlandı', YAPILMADI: 'Yapılmadı', BASKASI: 'Başkası Yaptı' }),
 
   // Kategoriler bu sırayla gösterilir; listede olmayanlar sona eklenir.
   KATEGORI_SIRASI: ['Açılış', 'Gün İçi', 'Kapanış'],
@@ -74,6 +75,7 @@ const CONFIG = Object.freeze({
   WEBAPP_URL_OZELLIK: 'WEBAPP_URL',
   YONETICI_OZELLIK: 'YONETICI_KODLARI', // Yönetici kodları Script Properties'te saklanır (tabloda değil)
   YONETICI_KOD_UZUNLUGU: 24,
+  PERFORMANS_GUN: [7, 30, 90],  // Performans sekmesindeki dönem seçenekleri
   TREND_GUN: 7,                // Yönetici panelindeki eğilim grafiği kaç günü gösterir
 
   RENK: Object.freeze({ BASLIK_ARKA: '#4F46E5', BASLIK_YAZI: '#FFFFFF' })
@@ -145,32 +147,44 @@ function gunlukVeriGetir(kod) {
   try {
     const personel = personelDogrula_(kod);
     if (!personel) throw kullaniciHatasi_('Oturumunuz geçersiz. Lütfen kişisel linkinizle yeniden açın.');
-
-    const simdi = new Date();
-    const gun = gunAnahtari_(simdi);
-    const gorevler = atanmisGorevler_(personel, false);
-    const bugunku = bugunkuKayitlar_(personel.kod, gun);
-
-    // Bugün "Tamamlandı" kaydedilmiş ve hâlâ atanmış olan görevler işaretli gelir.
-    const gecerliIdler = new Set(gorevler.map(function (g) { return g.id; }));
-    const tamamlananlar = bugunku.kayitlar
-      .filter(function (k) { return k.tamam && gecerliIdler.has(k.id); })
-      .map(function (k) { return k.id; });
-
-    return {
-      gun: gun,
-      tarihMetni: tarihMetni_(simdi),
-      kategoriler: kategorilereGrupla_(gorevler),
-      toplam: gorevler.length,
-      tamamlananlar: tamamlananlar,
-      not: bugunku.not,
-      sonKayit: bugunku.sonZaman
-        ? Utilities.formatDate(bugunku.sonZaman, CONFIG.SAAT_DILIMI, 'HH:mm')
-        : null
-    };
+    return gunlukVeri_(personel, null);
   } catch (hata) {
     throw istemciHatasi_(hata, 'Görevler yüklenirken bir sorun oluştu.');
   }
+}
+
+/**
+ * Personel ekranının verisini hazırlar. Görevler ORTAK olduğu için bugün
+ * başka biri tarafından yapılmış görevler "baskalari" içinde yapanın adı ve
+ * saatiyle döner; istemci bunları kilitli/işaretli gösterir.
+ */
+function gunlukVeri_(personel, veriler) {
+  const simdi = new Date();
+  const gun = gunAnahtari_(simdi);
+  veriler = veriler || kayitlariOku_();
+  const gorevler = atanmisGorevler_(personel, false);
+  const sahipler = gunSahipleri_(veriler, gun, null);
+  const benim = bugunkuKayitlar_(personel.kod, gun, veriler);
+
+  const tamamlananlar = [];
+  const baskalari = {};
+  gorevler.forEach(function (g) {
+    const s = sahipler[g.id];
+    if (!s) return;
+    if (s.kod === personel.kod) tamamlananlar.push(g.id);
+    else baskalari[g.id] = { ad: s.ad, saat: saatMetni_(s.zaman) };
+  });
+
+  return {
+    gun: gun,
+    tarihMetni: tarihMetni_(simdi),
+    kategoriler: kategorilereGrupla_(gorevler),
+    toplam: gorevler.length,
+    tamamlananlar: tamamlananlar,
+    baskalari: baskalari,
+    not: benim.not,
+    sonKayit: benim.sonZaman ? saatMetni_(benim.sonZaman) : null
+  };
 }
 
 /**
@@ -180,8 +194,12 @@ function gunlukVeriGetir(kod) {
  *   1. Kod sunucuda yeniden doğrulanır.
  *   2. Görev listesi tablodan TAZE okunur; istemciden gelen kimliklerden
  *      yalnızca bu personele atanmış aktif görevlere ait olanlar kabul edilir.
- *   3. ScriptLock alınır → aynı personelin bugüne ait eski satırları silinir
- *      → atanmış TÜM görevler (Tamamlandı / Yapılmadı) tek setValues ile yazılır.
+ *   3. ScriptLock alınır → bugünün kayıtları kilit içinde okunur:
+ *      • Görevi bugün BAŞKASI yapmışsa satır "Başkası Yaptı" olur (ilk yapan kazanır).
+ *      • Görevi bu kişi işaretlediyse "Tamamlandı" (ilk işaretleme saati korunur).
+ *      • Diğerleri "Yapılmadı".
+ *   4. Aynı personelin bugüne ait eski satırları silinir, atanmış TÜM görevler
+ *      tek setValues ile yazılır.
  *
  * @param {string}   kod            Personel kodu
  * @param {string[]} tamamlananIdler İşaretli görev kimlikleri ("Kategori::Görev")
@@ -215,46 +233,61 @@ function gorevleriKaydet(kod, tamamlananIdler, not, istemciGunu) {
     if (gorevler.length === 0) throw kullaniciHatasi_('Size atanmış aktif görev bulunmuyor.');
 
     const tarih = Utilities.parseDate(gun, CONFIG.SAAT_DILIMI, 'yyyy-MM-dd'); // İstanbul gece yarısı
-    let tamamSayisi = 0;
-    const satirlar = gorevler.map(function (g, i) {
-      const tamam = istenen.has(g.id);
-      if (tamam) tamamSayisi++;
-      return [
-        simdi,                    // A: Zaman Damgası (gerçek tarih-saat)
-        tarih,                    // B: Tarih (gerçek tarih)
-        personel.kod,             // C: Personel Kodu
-        personel.ad,              // D: Personel Adı
-        g.ad,                     // E: Görev Adı
-        g.kategori,               // F: Kategori
-        tamam ? CONFIG.DURUM.TAMAM : CONFIG.DURUM.YAPILMADI, // G: Durum
-        i === 0 ? temizNot : ''   // H: Not — yalnızca günün İLK satırına (bkz. rehber)
-      ];
-    });
+    const S = CONFIG.SUTUN.KAYITLAR;
+    let kendi = 0;
+    const cakisanlar = [];
 
-    // ── Kilitli bölge: sil + yaz atomik olmalı ──
+    // ── Kilitli bölge: oku + sil + yaz atomik olmalı ──
     const kilit = LockService.getScriptLock();
     if (!kilit.tryLock(CONFIG.KILIT_BEKLEME_MS)) {
       throw kullaniciHatasi_('Sistem şu anda yoğun. Lütfen birkaç saniye sonra tekrar deneyin.');
     }
     try {
       const sayfa = sayfaGetir_(CONFIG.SAYFA.KAYITLAR, CONFIG.BASLIK.KAYITLAR);
+      kayitBasliginiTamamla_(sayfa);
+      const veriler = kayitlariOku_();
 
-      // 1) Aynı personelin bugüne ait eski satırlarını bul ve sil
-      const sonSatir = sayfa.getLastRow();
-      if (sonSatir >= 2) {
-        const S = CONFIG.SUTUN.KAYITLAR;
-        // Yalnızca Tarih (B) ve Kod (C) sütunlarını okumak yeterli → daha hızlı
-        const degerler = sayfa.getRange(2, S.TARIH + 1, sonSatir - 1, 2).getValues();
-        const silinecek = [];
-        for (let i = 0; i < degerler.length; i++) {
-          if (kodNormalize_(degerler[i][1]) === personel.kod && hucreGunAnahtari_(degerler[i][0]) === gun) {
-            silinecek.push(i + 2);
-          }
+      // Bugün BAŞKALARININ yaptığı görevler (kilit içinde okunduğu için güncel)
+      const digerleri = gunSahipleri_(veriler, gun, personel.kod);
+
+      // Bu kişinin bugünkü eski satırları ve daha önce işaretlediği görevlerin saatleri
+      const silinecek = [];
+      const eskiZaman = {};
+      veriler.forEach(function (r, i) {
+        if (kodNormalize_(r[S.KOD]) !== personel.kod || hucreGunAnahtari_(r[S.TARIH]) !== gun) return;
+        silinecek.push(i + 2);
+        if (tamamMi_(r) && r[S.ZAMAN] instanceof Date) eskiZaman[satirGorevId_(r)] = r[S.ZAMAN];
+      });
+
+      const satirlar = gorevler.map(function (g, i) {
+        const diger = digerleri[g.id];
+        let durum = CONFIG.DURUM.YAPILMADI, zaman = simdi, tamamlayan = '';
+        if (diger) {
+          durum = CONFIG.DURUM.BASKASI;
+          tamamlayan = diger.ad;
+          if (istenen.has(g.id)) cakisanlar.push({ ad: g.ad, yapan: diger.ad });
+        } else if (istenen.has(g.id)) {
+          durum = CONFIG.DURUM.TAMAM;
+          tamamlayan = personel.ad;
+          zaman = eskiZaman[g.id] || simdi;
+          kendi++;
         }
-        satirlariSil_(sayfa, silinecek);
-      }
+        return [
+          zaman,                    // A: Zaman Damgası (gerçek tarih-saat)
+          tarih,                    // B: Tarih (gerçek tarih)
+          personel.kod,             // C: Personel Kodu
+          personel.ad,              // D: Personel Adı
+          g.ad,                     // E: Görev Adı
+          g.kategori,               // F: Kategori
+          durum,                    // G: Durum
+          i === 0 ? temizNot : '',  // H: Not — yalnızca günün İLK satırına (bkz. rehber)
+          tamamlayan                // I: Tamamlayan — görevi fiilen yapan kişi
+        ];
+      });
 
-      // 2) Yeni durumu tek seferde yaz
+      satirlariSil_(sayfa, silinecek);
+
+      // Yeni durumu tek seferde yaz
       const baslangic = sayfa.getLastRow() + 1;
       const gereken = baslangic + satirlar.length - 1;
       if (sayfa.getMaxRows() < gereken) {
@@ -262,10 +295,10 @@ function gorevleriKaydet(kod, tamamlananIdler, not, istemciGunu) {
       }
       const n = satirlar.length;
       // Kod sütunu metin biçiminde olmalı (ör. "12e4" sayıya dönüşmesin)
-      sayfa.getRange(baslangic, CONFIG.SUTUN.KAYITLAR.KOD + 1, n, 1).setNumberFormat(CONFIG.BICIM.METIN);
+      sayfa.getRange(baslangic, S.KOD + 1, n, 1).setNumberFormat(CONFIG.BICIM.METIN);
       sayfa.getRange(baslangic, 1, n, satirlar[0].length).setValues(satirlar);
-      sayfa.getRange(baslangic, CONFIG.SUTUN.KAYITLAR.ZAMAN + 1, n, 1).setNumberFormat(CONFIG.BICIM.ZAMAN);
-      sayfa.getRange(baslangic, CONFIG.SUTUN.KAYITLAR.TARIH + 1, n, 1).setNumberFormat(CONFIG.BICIM.TARIH);
+      sayfa.getRange(baslangic, S.ZAMAN + 1, n, 1).setNumberFormat(CONFIG.BICIM.ZAMAN);
+      sayfa.getRange(baslangic, S.TARIH + 1, n, 1).setNumberFormat(CONFIG.BICIM.TARIH);
 
       SpreadsheetApp.flush(); // Kilit bırakılmadan önce yazımın tamamlandığından emin ol
     } finally {
@@ -274,10 +307,11 @@ function gorevleriKaydet(kod, tamamlananIdler, not, istemciGunu) {
 
     return {
       basarili: true,
-      tamamlanan: tamamSayisi,
-      toplam: gorevler.length,
-      saat: Utilities.formatDate(simdi, CONFIG.SAAT_DILIMI, 'HH:mm'),
-      tarihMetni: tarihMetni_(simdi)
+      kendi: kendi,
+      cakisanlar: cakisanlar,   // Kullanıcının işaretlediği ama başkasının önce yaptığı görevler
+      saat: saatMetni_(simdi),
+      tarihMetni: tarihMetni_(simdi),
+      veri: gunlukVeri_(personel, null) // Güncel ortak durum (diğerlerinin yaptıkları dahil)
     };
   } catch (hata) {
     throw istemciHatasi_(hata, 'Kayıt sırasında bir sorun oluştu. Lütfen tekrar deneyin.');
@@ -417,24 +451,12 @@ function kategorilereGrupla_(gorevler) {
   return gruplar;
 }
 
-/**
- * Kayitlar sayfasından personelin verilen güne ait satırlarını okur.
- * Önbellek KULLANILMAZ; her zaman tablodaki güncel veri döner.
- */
-function bugunkuKayitlar_(kod, gun) {
-  const sonuc = { kayitlar: [], not: '', sonZaman: null };
-  const sayfa = sayfaGetir_(CONFIG.SAYFA.KAYITLAR, CONFIG.BASLIK.KAYITLAR);
-  const son = sayfa.getLastRow();
-  if (son < 2) return sonuc;
-
+/** Personelin verilen güne ait notunu ve son kayıt zamanını bulur. */
+function bugunkuKayitlar_(kod, gun, veriler) {
+  const sonuc = { not: '', sonZaman: null };
   const S = CONFIG.SUTUN.KAYITLAR;
-  const veriler = sayfa.getRange(2, 1, son - 1, CONFIG.BASLIK.KAYITLAR.length).getValues();
   veriler.forEach(function (r) {
     if (kodNormalize_(r[S.KOD]) !== kod || hucreGunAnahtari_(r[S.TARIH]) !== gun) return;
-    sonuc.kayitlar.push({
-      id: gorevId_(String(r[S.KATEGORI] || '').trim() || CONFIG.VARSAYILAN_KATEGORI, String(r[S.GOREV] || '').trim()),
-      tamam: metinNormalize_(r[S.DURUM]) === metinNormalize_(CONFIG.DURUM.TAMAM)
-    });
     const not = String(r[S.NOT] || '').trim();
     if (not && !sonuc.not) sonuc.not = not;
     if (r[S.ZAMAN] instanceof Date && (!sonuc.sonZaman || r[S.ZAMAN] > sonuc.sonZaman)) {
@@ -444,6 +466,76 @@ function bugunkuKayitlar_(kod, gun) {
   return sonuc;
 }
 
+/**
+ * ORTAK GÖREV MANTIĞI — bir günde hangi görevi kimin yaptığı.
+ * "Tamamlandı" satırı, görevi o satırdaki kişinin yaptığını gösterir. Aynı
+ * görevi birden fazla kişi işaretlemişse (eski veriler) en erken saat esas alınır.
+ * @param {string|null} haricKod Bu kişinin satırları yok sayılır (kayıt sırasında).
+ * @return {Object} { "Kategori::Görev": { kod, ad, zaman } }
+ */
+function gunSahipleri_(veriler, gun, haricKod) {
+  const S = CONFIG.SUTUN.KAYITLAR;
+  const sonuc = {};
+  veriler.forEach(function (r) {
+    if (!tamamMi_(r) || hucreGunAnahtari_(r[S.TARIH]) !== gun) return;
+    const kod = kodNormalize_(r[S.KOD]);
+    if (haricKod && kod === haricKod) return;
+    const id = satirGorevId_(r);
+    const zaman = r[S.ZAMAN] instanceof Date ? r[S.ZAMAN] : null;
+    const mevcut = sonuc[id];
+    if (!mevcut || (zaman && (!mevcut.zaman || zaman < mevcut.zaman))) {
+      sonuc[id] = { kod: kod, ad: String(r[S.AD] || ''), zaman: zaman };
+    }
+  });
+  return sonuc;
+}
+
+/**
+ * Günün ekip geneli: benzersiz görev sayısı ve bunlardan yapılanlar.
+ * (Ortak görev birden çok kişiye atanmış olsa da bir kez sayılır.)
+ * @param {string[]} ekIdler Kayıt göndermemiş kişilerin bekleyen görevleri (bugün için)
+ */
+function gunGenel_(veriler, gun, ekIdler) {
+  const S = CONFIG.SUTUN.KAYITLAR;
+  const idler = new Set(ekIdler || []);
+  const yapilan = new Set();
+  veriler.forEach(function (r) {
+    if (hucreGunAnahtari_(r[S.TARIH]) !== gun) return;
+    const id = satirGorevId_(r);
+    idler.add(id);
+    if (tamamMi_(r)) yapilan.add(id);
+  });
+  return { tamam: yapilan.size, toplam: idler.size };
+}
+
+/** Kayitlar satırının görev kimliği ("Kategori::Görev"). */
+function satirGorevId_(r) {
+  const S = CONFIG.SUTUN.KAYITLAR;
+  return gorevId_(String(r[S.KATEGORI] || '').trim() || CONFIG.VARSAYILAN_KATEGORI, String(r[S.GOREV] || '').trim());
+}
+
+/** Satırın durumu "Tamamlandı" mı (bu kişi bizzat yaptı mı)? */
+function tamamMi_(r) {
+  return metinNormalize_(r[CONFIG.SUTUN.KAYITLAR.DURUM]) === metinNormalize_(CONFIG.DURUM.TAMAM);
+}
+
+/** Tarih nesnesini İstanbul saatiyle "HH:mm" yapar. */
+function saatMetni_(zaman) {
+  return zaman ? Utilities.formatDate(zaman, CONFIG.SAAT_DILIMI, 'HH:mm') : '';
+}
+
+/** Eski kurulumlarda Kayitlar başlık satırına yeni eklenen sütun başlıklarını yazar. */
+function kayitBasliginiTamamla_(sayfa) {
+  const b = CONFIG.BASLIK.KAYITLAR;
+  const mevcut = sayfa.getRange(1, 1, 1, b.length).getValues()[0];
+  for (let i = 0; i < b.length; i++) {
+    if (mevcut[i] === '') {
+      sayfa.getRange(1, i + 1, 1, b.length - i).setValues([b.slice(i)])
+        .setFontWeight('bold').setBackground(CONFIG.RENK.BASLIK_ARKA).setFontColor(CONFIG.RENK.BASLIK_YAZI);
+      return;
+    }
+  }
+}
 
 /* ────────────────────────────────────────────────────────────────────
  *  Yardımcılar (tarih, metin, sayfa, hata)
@@ -662,9 +754,10 @@ function kurulum() {
   kayitlar.getRange('A2:A').setNumberFormat(CONFIG.BICIM.ZAMAN);
   kayitlar.getRange('B2:B').setNumberFormat(CONFIG.BICIM.TARIH);
   kayitlar.getRange('C2:C').setNumberFormat(CONFIG.BICIM.METIN);
-  listeDogrulamasi_(kayitlar.getRange('G2:G'), [CONFIG.DURUM.TAMAM, CONFIG.DURUM.YAPILMADI], false);
+  kayitBasliginiTamamla_(kayitlar);
+  listeDogrulamasi_(kayitlar.getRange('G2:G'), [CONFIG.DURUM.TAMAM, CONFIG.DURUM.YAPILMADI, CONFIG.DURUM.BASKASI], false);
   kayitlar.setColumnWidth(1, 140).setColumnWidth(2, 95).setColumnWidth(3, 95).setColumnWidth(4, 150)
-          .setColumnWidth(5, 280).setColumnWidth(6, 90).setColumnWidth(7, 100).setColumnWidth(8, 280);
+          .setColumnWidth(5, 280).setColumnWidth(6, 90).setColumnWidth(7, 110).setColumnWidth(8, 280).setColumnWidth(9, 150);
 
   // ── Ozet ──
   if (!ss.getSheetByName(CONFIG.SAYFA.OZET)) {
@@ -911,7 +1004,7 @@ function ozetSayfasiHazirla_() {
   sayfa.getRange('C2').setValue('← Tarihi değiştirin; özet otomatik güncellenir (veya menü: Görev Takip > Özeti Güncelle).')
     .setFontColor('#64748B').setFontStyle('italic');
   sayfa.setColumnWidth(1, 180).setColumnWidth(2, 100).setColumnWidth(3, 110).setColumnWidth(4, 80)
-       .setColumnWidth(5, 80).setColumnWidth(6, 130).setColumnWidth(7, 320);
+       .setColumnWidth(5, 100).setColumnWidth(6, 80).setColumnWidth(7, 100).setColumnWidth(8, 320);
   sayfa.setFrozenRows(5);
   ozetHesapla_();
   return sayfa;
@@ -934,44 +1027,46 @@ function ozetHesapla_() {
     sayfa.getRange('B2').setValue(Utilities.parseDate(gun, CONFIG.SAAT_DILIMI, 'yyyy-MM-dd'));
   }
 
-  const liste = gunOzeti_(gun, kayitlariOku_());
+  const veriler = kayitlariOku_();
+  const liste = gunOzeti_(gun, veriler);
+  const genel = gunGenel_(veriler, gun, null);
 
   // Eski tabloyu temizle
   const basSatir = 5;
-  const sutunSayisi = 7;
+  const sutunSayisi = 8;
   const maks = sayfa.getMaxRows();
   if (maks >= basSatir) {
-    sayfa.getRange(basSatir, 1, maks - basSatir + 1, sutunSayisi).clear();
+    sayfa.getRange(basSatir, 1, maks - basSatir + 1, sutunSayisi + 1).clear();
   }
   sayfa.clearConditionalFormatRules();
 
   // Başlık + satırlar + toplam
-  const tablo = [['Personel', 'Kod', 'Tamamlanan', 'Toplam', 'Yüzde', 'Son Kayıt', 'Not']];
-  let genelTamam = 0, genelToplam = 0;
+  // "Kendi Yaptığı": bizzat yaptığı; "Tamamlanan": atanan görevlerinden (kim yaparsa yapsın) bitenler.
+  const tablo = [['Personel', 'Kod', 'Kendi Yaptığı', 'Atanan', 'Tamamlanan', 'Yüzde', 'Son Kayıt', 'Not']];
+  let kendiToplam = 0;
   liste.forEach(function (o) {
-    genelTamam += o.tamam;
-    genelToplam += o.toplam;
+    kendiToplam += o.kendi;
     tablo.push([
-      o.ad, o.kod, o.tamam, o.toplam,
+      o.ad, o.kod, o.kendi, o.toplam, o.tamam,
       o.toplam ? o.tamam / o.toplam : '',
       o.kayitYok ? 'Kayıt yok' : (o.son || ''),
       o.not
     ]);
   });
-  tablo.push(['TOPLAM', '', genelTamam, genelToplam, genelToplam ? genelTamam / genelToplam : '', '', '']);
+  tablo.push(['EKİP (benzersiz görev)', '', kendiToplam, genel.toplam, genel.tamam, genel.toplam ? genel.tamam / genel.toplam : '', '', '']);
 
   sayfa.getRange(basSatir, 1, tablo.length, sutunSayisi).setValues(tablo);
   basliklariBicimle_(sayfa.getRange(basSatir, 1, 1, sutunSayisi));
   const veriAralik = sayfa.getRange(basSatir + 1, 1, tablo.length - 1, sutunSayisi);
   veriAralik.setVerticalAlignment('middle');
   sayfa.getRange(basSatir + 1, 2, tablo.length - 1, 1).setNumberFormat(CONFIG.BICIM.METIN);
-  sayfa.getRange(basSatir + 1, 5, tablo.length - 1, 1).setNumberFormat('0%').setHorizontalAlignment('center');
-  sayfa.getRange(basSatir + 1, 6, tablo.length - 1, 1).setNumberFormat('HH:mm');
+  sayfa.getRange(basSatir + 1, 6, tablo.length - 1, 1).setNumberFormat('0%').setHorizontalAlignment('center');
+  sayfa.getRange(basSatir + 1, 7, tablo.length - 1, 1).setNumberFormat('HH:mm');
   sayfa.getRange(basSatir + tablo.length - 1, 1, 1, sutunSayisi).setFontWeight('bold').setBackground('#F1F5F9');
 
   // Yüzde sütununa kırmızı → sarı → yeşil renk skalası
   if (liste.length) {
-    const yuzdeAralik = sayfa.getRange(basSatir + 1, 5, liste.length, 1);
+    const yuzdeAralik = sayfa.getRange(basSatir + 1, 6, liste.length, 1);
     sayfa.setConditionalFormatRules([
       SpreadsheetApp.newConditionalFormatRule()
         .setGradientMinpointWithValue('#FEE2E2', SpreadsheetApp.InterpolationType.NUMBER, '0')
@@ -997,21 +1092,31 @@ function kayitlariOku_() {
  * Verilen gün için personel bazında özet üretir (Ozet sayfası ve yönetici
  * paneli ortak kullanır). Kayıt göndermemiş aktif personel kayitYok:true
  * olarak eklenir. Liste ada göre sıralıdır.
- * Her öğe: { kod, ad, tamam, toplam, son(Date|null), not, gorevler:[{ad,kategori,tamam}], kayitYok }
+ * Her öğe: { kod, ad, tamam, toplam, kendi, son(Date|null), not, kayitYok,
+ *            gorevler:[{ ad, kategori, durum:'ben'|'baska'|'yok', yapan, saat }] }
+ *   tamam : atanan görevlerinden (kim yaparsa yapsın) yapılanlar
+ *   kendi : bizzat yaptıkları
  */
 function gunOzeti_(gun, veriler) {
   const S = CONFIG.SUTUN.KAYITLAR;
-  const tamamN = metinNormalize_(CONFIG.DURUM.TAMAM);
+  const sahipler = gunSahipleri_(veriler, gun, null);
   const ozet = {};
   veriler.forEach(function (r) {
     if (hucreGunAnahtari_(r[S.TARIH]) !== gun) return;
     const kod = kodNormalize_(r[S.KOD]);
-    if (!ozet[kod]) ozet[kod] = { ad: String(r[S.AD] || ''), kod: kod, tamam: 0, toplam: 0, son: null, not: '', gorevler: [] };
+    if (!ozet[kod]) ozet[kod] = { ad: String(r[S.AD] || ''), kod: kod, tamam: 0, toplam: 0, kendi: 0, son: null, not: '', gorevler: [] };
     const o = ozet[kod];
-    const tamam = metinNormalize_(r[S.DURUM]) === tamamN;
+    const s = sahipler[satirGorevId_(r)];
+    let durum = 'yok', yapan = '', saat = '';
+    if (tamamMi_(r)) {
+      durum = 'ben'; yapan = o.ad; saat = saatMetni_(r[S.ZAMAN] instanceof Date ? r[S.ZAMAN] : null);
+      o.kendi++;
+    } else if (s) {
+      durum = 'baska'; yapan = s.ad; saat = saatMetni_(s.zaman);
+    }
     o.toplam++;
-    if (tamam) o.tamam++;
-    o.gorevler.push({ ad: String(r[S.GOREV] || ''), kategori: String(r[S.KATEGORI] || ''), tamam: tamam });
+    if (durum !== 'yok') o.tamam++;
+    o.gorevler.push({ ad: String(r[S.GOREV] || ''), kategori: String(r[S.KATEGORI] || ''), durum: durum, yapan: yapan, saat: saat });
     if (r[S.ZAMAN] instanceof Date && (!o.son || r[S.ZAMAN] > o.son)) o.son = r[S.ZAMAN];
     const not = String(r[S.NOT] || '').trim();
     if (not && !o.not) o.not = not;
@@ -1020,7 +1125,7 @@ function gunOzeti_(gun, veriler) {
   const harita = personelHaritasi_();
   Object.keys(harita).forEach(function (kod) {
     if (harita[kod].aktif && !ozet[kod]) {
-      ozet[kod] = { ad: harita[kod].ad, kod: kod, tamam: 0, toplam: 0, son: null, not: '', gorevler: [], kayitYok: true };
+      ozet[kod] = { ad: harita[kod].ad, kod: kod, tamam: 0, toplam: 0, kendi: 0, son: null, not: '', gorevler: [], kayitYok: true };
     }
   });
 
@@ -1130,50 +1235,45 @@ function yoneticiOzetGetir(yKod, gun) {
     const veriler = kayitlariOku_();
 
     const bugunMu = gun === gunAnahtari_();
+    const sahipler = gunSahipleri_(veriler, gun, null);
+    const ekIdler = [];
     const liste = gunOzeti_(gun, veriler).map(function (o) {
-      // Bugün henüz kayıt göndermeyenlerin atanmış görevleri "bekliyor" olarak gösterilir.
-      // Geçmiş günlerde atamalar değişmiş olabileceği için tahmin yapılmaz.
+      // Bugün henüz kayıt göndermeyenlerin atanmış görevleri: başkası yaptıysa yapanıyla,
+      // değilse "bekliyor" olarak gösterilir. Geçmiş günlerde atamalar değişmiş olabileceği
+      // için tahmin yapılmaz.
       const bekleyen = (o.kayitYok && bugunMu)
-        ? atanmisGorevler_({ kod: o.kod, ad: o.ad }, false).map(function (g) { return { ad: g.ad, kategori: g.kategori }; })
+        ? atanmisGorevler_({ kod: o.kod, ad: o.ad }, false).map(function (g) {
+            ekIdler.push(g.id);
+            const s = sahipler[g.id];
+            return { ad: g.ad, kategori: g.kategori, durum: s ? 'baska' : 'bekliyor', yapan: s ? s.ad : '', saat: s ? saatMetni_(s.zaman) : '' };
+          })
         : [];
       return {
-        kod: o.kod, ad: o.ad, tamam: o.tamam, toplam: o.toplam, not: o.not,
-        son: o.son ? Utilities.formatDate(o.son, CONFIG.SAAT_DILIMI, 'HH:mm') : null,
+        kod: o.kod, ad: o.ad, tamam: o.tamam, toplam: o.toplam, kendi: o.kendi, not: o.not,
+        son: o.son ? saatMetni_(o.son) : null,
         kayitYok: !!o.kayitYok, gorevler: o.gorevler, bekleyen: bekleyen
       };
     });
+    const genel = gunGenel_(veriler, gun, ekIdler);
 
-    // Son N günün genel oranı (tek geçişte)
-    const gunler = [];
-    const sayac = {};
+    // Son N günün ekip geneli oranı
+    const kisaGun = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+    const trend = [];
     for (let i = CONFIG.TREND_GUN - 1; i >= 0; i--) {
       // Öğle saatine göre kaydır: yaz saati geçişlerinde gün atlamasın
-      const g = gunAnahtari_(new Date(secilen.getTime() + 12 * 3600000 - i * 86400000));
-      gunler.push(g);
-      sayac[g] = { tamam: 0, toplam: 0 };
-    }
-    const S = CONFIG.SUTUN.KAYITLAR;
-    const tamamN = metinNormalize_(CONFIG.DURUM.TAMAM);
-    veriler.forEach(function (r) {
-      const g = hucreGunAnahtari_(r[S.TARIH]);
-      if (!sayac[g]) return;
-      sayac[g].toplam++;
-      if (metinNormalize_(r[S.DURUM]) === tamamN) sayac[g].tamam++;
-    });
-    const kisaGun = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-    const trend = gunler.map(function (g) {
-      const d = Utilities.parseDate(g, CONFIG.SAAT_DILIMI, 'yyyy-MM-dd');
-      const hg = Number(Utilities.formatDate(d, CONFIG.SAAT_DILIMI, 'u'));
-      return {
+      const d = new Date(secilen.getTime() + 12 * 3600000 - i * 86400000);
+      const g = gunAnahtari_(d);
+      const gg = g === gun ? genel : gunGenel_(veriler, g, null);
+      trend.push({
         gun: g,
-        etiket: kisaGun[hg - 1],
+        etiket: kisaGun[Number(Utilities.formatDate(d, CONFIG.SAAT_DILIMI, 'u')) - 1],
         gunNo: Number(Utilities.formatDate(d, CONFIG.SAAT_DILIMI, 'd')),
-        tamam: sayac[g].tamam,
-        toplam: sayac[g].toplam
-      };
-    });
+        tamam: gg.tamam,
+        toplam: gg.toplam
+      });
+    }
 
-    return { gun: gun, bugun: gunAnahtari_(), tarihMetni: tarihMetni_(secilen), personeller: liste, trend: trend };
+    return { gun: gun, bugun: gunAnahtari_(), tarihMetni: tarihMetni_(secilen), personeller: liste, genel: genel, trend: trend };
   } catch (hata) {
     throw istemciHatasi_(hata, 'Özet yüklenirken bir sorun oluştu.');
   }
@@ -1209,15 +1309,7 @@ function yoneticiGorevKaydet(yKod, g) {
     const siraSayi = Number(g.sira);
     const sira = (g.sira === '' || g.sira == null || isNaN(siraSayi)) ? '' : Math.round(siraSayi);
 
-    // Atananlar: yalnızca var olan personel kabul edilir; tabloya okunur olsun diye AD yazılır
-    const personel = personelListesi_();
-    let atanan = '';
-    if (!g.herkes) {
-      const istenen = new Set((Array.isArray(g.atananKodlar) ? g.atananKodlar : []).map(kodNormalize_));
-      const adlar = personel.filter(function (p) { return istenen.has(p.kod); }).map(function (p) { return p.ad; });
-      if (!adlar.length) throw kullaniciHatasi_('En az bir kişi seçin ya da "Herkes" seçeneğini işaretleyin.');
-      atanan = adlar.join(', ');
-    }
+    const atanan = atananMetni_(g.herkes, g.atananKodlar);
     const satirDegeri = [ad, kategori, atanan, g.aktif === false ? 'Hayır' : 'Evet', sira];
 
     const kilit = LockService.getScriptLock();
@@ -1276,6 +1368,135 @@ function yoneticiGorevSil(yKod, satir, eskiAd) {
     return yoneticiGorevVerisi_();
   } catch (hata) {
     throw istemciHatasi_(hata, 'Görev silinirken bir sorun oluştu.');
+  }
+}
+
+/**
+ * Atama hücresi metnini üretir: "Herkes" için boş; aksi halde yalnızca var
+ * olan personelin ADLARI (tabloda okunur olsun diye) virgülle yazılır.
+ */
+function atananMetni_(herkes, atananKodlar) {
+  if (herkes) return '';
+  const istenen = new Set((Array.isArray(atananKodlar) ? atananKodlar : []).map(kodNormalize_));
+  const adlar = personelListesi_()
+    .filter(function (p) { return istenen.has(p.kod); })
+    .map(function (p) { return p.ad; });
+  if (!adlar.length) throw kullaniciHatasi_('En az bir kişi seçin ya da "Herkes" seçeneğini işaretleyin.');
+  return adlar.join(', ');
+}
+
+/**
+ * [İSTEMCİYE AÇIK — YÖNETİCİ] Bir kategorideki TÜM görevleri aynı kişilere
+ * (veya herkese) atar. Görevlerin diğer alanlarına dokunulmaz.
+ */
+function yoneticiKategoriAta(yKod, kategori, herkes, atananKodlar) {
+  try {
+    yoneticiGerekli_(yKod);
+    const katN = metinNormalize_(hucreMetni_(kategori, 50).replace(/^'/, '') || CONFIG.VARSAYILAN_KATEGORI);
+    const atanan = atananMetni_(herkes, atananKodlar);
+
+    const kilit = LockService.getScriptLock();
+    if (!kilit.tryLock(CONFIG.KILIT_BEKLEME_MS)) throw kullaniciHatasi_('Sistem şu anda yoğun. Lütfen tekrar deneyin.');
+    let adet = 0;
+    try {
+      const sayfa = sayfaGetir_(CONFIG.SAYFA.GOREVLER, CONFIG.BASLIK.GOREVLER);
+      const son = sayfa.getLastRow();
+      if (son < 2) throw kullaniciHatasi_('Görev listesi boş.');
+      const S = CONFIG.SUTUN.GOREVLER;
+      const aralik = sayfa.getRange(2, 1, son - 1, S.ATANAN + 1);
+      const degerler = aralik.getValues();
+      degerler.forEach(function (r) {
+        if (!String(r[S.AD] || '').trim()) return;
+        if (metinNormalize_(String(r[S.KATEGORI] || '').trim() || CONFIG.VARSAYILAN_KATEGORI) !== katN) return;
+        r[S.ATANAN] = atanan;
+        adet++;
+      });
+      if (!adet) throw kullaniciHatasi_('Bu kategoride görev bulunamadı. Liste yenilendi; tekrar deneyin.');
+      // Yalnızca Atanan sütunu yazılır (kilit içinde okunan değerlerle → diğer satırlar korunur)
+      sayfa.getRange(2, S.ATANAN + 1, degerler.length, 1).setValues(degerler.map(function (r) { return [r[S.ATANAN]]; }));
+      SpreadsheetApp.flush();
+    } finally {
+      kilit.releaseLock();
+    }
+    onbellekTemizle_();
+    const veri = yoneticiGorevVerisi_();
+    veri.guncellenen = adet;
+    return veri;
+  } catch (hata) {
+    throw istemciHatasi_(hata, 'Kategori ataması kaydedilirken bir sorun oluştu.');
+  }
+}
+
+/**
+ * [İSTEMCİYE AÇIK — YÖNETİCİ] Son N günde kimin kaç görevi BİZZAT yaptığı.
+ * Görevler ortak olduğu için "Tamamlandı" satırları görevi fiilen yapan
+ * kişiyi gösterir; böylece işi sahiplenen ve geride kalan görülebilir.
+ */
+function yoneticiPerformansGetir(yKod, gunSayisi) {
+  try {
+    yoneticiGerekli_(yKod);
+    gunSayisi = Number(gunSayisi);
+    if (CONFIG.PERFORMANS_GUN.indexOf(gunSayisi) === -1) gunSayisi = CONFIG.PERFORMANS_GUN[1];
+    const bitis = gunAnahtari_();
+    const bitisTarih = Utilities.parseDate(bitis, CONFIG.SAAT_DILIMI, 'yyyy-MM-dd');
+    const baslangicTarih = new Date(bitisTarih.getTime() + 12 * 3600000 - (gunSayisi - 1) * 86400000);
+    const baslangic = gunAnahtari_(baslangicTarih);
+
+    const S = CONFIG.SUTUN.KAYITLAR;
+    const kisiler = {};
+    function kisi(kod, ad, aktif) {
+      if (!kisiler[kod]) kisiler[kod] = { kod: kod, ad: ad, aktif: aktif, yapilan: 0, gunler: {}, kategoriler: {}, gorevler: {} };
+      return kisiler[kod];
+    }
+    personelListesi_().forEach(function (p) { if (p.aktif) kisi(p.kod, p.ad, true); });
+
+    let toplam = 0;
+    const ekipGunleri = {};
+    kayitlariOku_().forEach(function (r) {
+      const g = hucreGunAnahtari_(r[S.TARIH]);
+      if (!g || g < baslangic || g > bitis) return;   // yyyy-MM-dd metin karşılaştırması güvenlidir
+      const k = kisi(kodNormalize_(r[S.KOD]), String(r[S.AD] || ''), false);
+      k.gunler[g] = true;
+      ekipGunleri[g] = true;
+      if (!tamamMi_(r)) return;
+      toplam++;
+      k.yapilan++;
+      const kat = String(r[S.KATEGORI] || '').trim() || CONFIG.VARSAYILAN_KATEGORI;
+      k.kategoriler[kat] = (k.kategoriler[kat] || 0) + 1;
+      const gad = String(r[S.GOREV] || '').trim();
+      const gid = kat + '::' + gad;
+      if (!k.gorevler[gid]) k.gorevler[gid] = { ad: gad, kategori: kat, adet: 0 };
+      k.gorevler[gid].adet++;
+    });
+
+    const liste = Object.keys(kisiler).map(function (kod) {
+      const k = kisiler[kod];
+      const kayitGunu = Object.keys(k.gunler).length;
+      return {
+        kod: k.kod, ad: k.ad, aktif: k.aktif,
+        yapilan: k.yapilan,
+        pay: toplam ? k.yapilan / toplam : 0,
+        kayitGunu: kayitGunu,
+        gunlukOrt: kayitGunu ? Math.round(k.yapilan / kayitGunu * 10) / 10 : 0,
+        kategoriler: Object.keys(k.kategoriler).map(function (a) { return { ad: a, adet: k.kategoriler[a] }; })
+          .sort(function (a, b) { return b.adet - a.adet; }),
+        enCok: Object.keys(k.gorevler).map(function (id) { return k.gorevler[id]; })
+          .sort(function (a, b) { return b.adet - a.adet || a.ad.localeCompare(b.ad, 'tr'); }).slice(0, 5)
+      };
+    }).filter(function (k) { return k.aktif || k.yapilan > 0; })
+      .sort(function (a, b) { return b.yapilan - a.yapilan || a.ad.localeCompare(b.ad, 'tr'); });
+
+    return {
+      gunSayisi: gunSayisi,
+      aralikMetni: Utilities.formatDate(baslangicTarih, CONFIG.SAAT_DILIMI, 'd.MM') + ' – ' +
+                   Utilities.formatDate(bitisTarih, CONFIG.SAAT_DILIMI, 'd.MM.yyyy'),
+      toplam: toplam,
+      ekipGunu: Object.keys(ekipGunleri).length,
+      ortalama: liste.length ? Math.round(toplam / liste.length * 10) / 10 : 0,
+      kisiler: liste
+    };
+  } catch (hata) {
+    throw istemciHatasi_(hata, 'Performans verisi yüklenirken bir sorun oluştu.');
   }
 }
 

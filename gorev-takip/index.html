@@ -220,6 +220,14 @@
       text-decoration-thickness: 2px;
     }
     .gorev.tamam { background: linear-gradient(90deg, var(--basari-acik), transparent 70%); }
+    .gorev-metin { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .gorev-alt { font-size: 13px; font-weight: 600; color: var(--basari-koyu); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+    .gorev-alt svg { width: 14px; height: 14px; flex: none; }
+    /* Görevi bugün başka biri yaptı: işaretli, kilitli */
+    .gorev.baskasi { cursor: default; }
+    .gorev.baskasi:active { background: linear-gradient(90deg, var(--basari-acik), transparent 70%); }
+    .gorev.baskasi .kutu { opacity: .55; }
+    .gorev.baskasi:active .kutu { transform: none; }
 
     /* ═══════════════ Not alanı ═══════════════ */
     .not-kart {
@@ -566,8 +574,8 @@
   <!-- Onay penceresi -->
   <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalBaslik">
     <div class="modal-kart">
-      <h3 id="modalBaslik">Hiç görev işaretlenmedi</h3>
-      <p id="modalMetin">Tüm görevler "Yapılmadı" olarak kaydedilecek. Devam etmek istiyor musunuz?</p>
+      <h3 id="modalBaslik">Hiç görev işaretlemediniz</h3>
+      <p id="modalMetin">Yapılmayan görevler "Yapılmadı" olarak kaydedilecek. Devam etmek istiyor musunuz?</p>
       <div class="modal-butonlar">
         <button type="button" class="btn-iptal" id="modalIptal">Vazgeç</button>
         <button type="button" class="btn-onay" id="modalOnay">Yine de Kaydet</button>
@@ -594,8 +602,12 @@
       kaydediliyor: false,
       kayitliHal: '',       // Son kaydedilen/yüklenen durumun özeti (değişiklik tespiti için)
       istekNo: 0,
-      zamanlayici: null
+      zamanlayici: null,
+      kayitliNot: '',       // Sunucudaki son not
+      imza: '',             // Liste + başkalarının yaptıkları (otomatik yenilemede değişiklik tespiti)
+      yenileniyor: false
     };
+    var OTOMATIK_YENILEME_MS = 30000; // Ortak görevlerde başkalarının işaretlerini görmek için
 
     /* ─────────── Başlangıç ─────────── */
     if (!BASLANGIC || !BASLANGIC.gecerli) {
@@ -652,16 +664,19 @@
         return;
       }
 
-      ciz(veri.kategoriler, veri.tamamlananlar);
+      ciz(veri.kategoriler, veri.tamamlananlar, veri.baskalari);
+      durum.imza = imzaOlustur(veri);
+      durum.kayitliNot = veri.not || '';
       $('notAlani').value = veri.not || '';
       $('karakterSayac').textContent = $('notAlani').value.length;
       $('notBolumu').hidden = false;
       $('altBar').hidden = false;
       sonKayitGoster(veri.sonKayit);
 
-      durum.kayitliHal = halOzeti();
+      durum.kayitliHal = kayitliHalOzeti(veri);
       ilerlemeGuncelle();
       degisiklikKontrol();
+      otomatikYenilemeBaslat();
     }
 
     function yuklemeHatasi(hata) {
@@ -671,9 +686,10 @@
     }
 
     /** Görev listesini kategori başlıklarıyla oluşturur (textContent → XSS güvenli). */
-    function ciz(kategoriler, tamamlananlar) {
+    function ciz(kategoriler, tamamlananlar, baskalari) {
       var tamam = {};
       (tamamlananlar || []).forEach(function (id) { tamam[id] = true; });
+      baskalari = baskalari || {};
       var kok = $('gorevListesi');
       var parca = document.createDocumentFragment();
       var sayac = 0;
@@ -698,18 +714,32 @@
           cb.type = 'checkbox';
           cb.id = satirId;
           cb.value = g.id;
-          cb.checked = !!tamam[g.id];
+          var baskasi = baskalari[g.id];
+          cb.checked = !!tamam[g.id] || !!baskasi;
+          cb.disabled = !!baskasi; // Başkası yaptıysa kilitli: geri alınamaz
 
           var kutu = el('span', 'kutu');
           kutu.setAttribute('aria-hidden', 'true');
           kutu.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
+          var metin = el('span', 'gorev-metin');
           var ad = el('span', 'gorev-ad');
           ad.textContent = g.ad;
+          metin.appendChild(ad);
+          if (baskasi) {
+            var alt = el('span', 'gorev-alt');
+            alt.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
+            var yazi = el('span');
+            yazi.textContent = baskasi.ad + ' yaptı' + (baskasi.saat ? ' · ' + baskasi.saat : '');
+            alt.appendChild(yazi);
+            metin.appendChild(alt);
+            label.classList.add('baskasi');
+            label.title = 'Bu görevi bugün ' + baskasi.ad + ' tamamladı.';
+          }
 
           label.appendChild(cb);
           label.appendChild(kutu);
-          label.appendChild(ad);
+          label.appendChild(metin);
           label.classList.toggle('tamam', cb.checked);
 
           cb.addEventListener('change', function () {
@@ -729,16 +759,30 @@
 
     /* ─────────── İlerleme ve değişiklik takibi ─────────── */
 
+    /** Bu kişinin KENDİ işaretledikleri (başkasının yaptığı kilitli görevler hariç). */
     function isaretliIdler() {
       return Array.prototype.map.call(
-        document.querySelectorAll('#gorevListesi input[type=checkbox]:checked'),
+        document.querySelectorAll('#gorevListesi input[type=checkbox]:checked:not(:disabled)'),
         function (cb) { return cb.value; }
       );
     }
 
+    /** Liste + başkalarının yaptıklarının özeti; değiştiyse ekran yeniden çizilir. */
+    function imzaOlustur(veri) {
+      return JSON.stringify([
+        veri.kategoriler.map(function (k) { return [k.ad, k.gorevler.map(function (g) { return g.id; })]; }),
+        Object.keys(veri.baskalari || {}).sort().map(function (id) { return [id, veri.baskalari[id].ad]; })
+      ]);
+    }
+
+    /** Sunucuda kayıtlı durumun özeti (kaydedilmemiş değişiklik tespiti için). */
+    function kayitliHalOzeti(veri) {
+      return JSON.stringify([(veri.tamamlananlar || []).slice().sort(), (veri.not || '').trim()]);
+    }
+
     function ilerlemeGuncelle() {
       var toplam = durum.toplam;
-      var biten = isaretliIdler().length;
+      var biten = document.querySelectorAll('#gorevListesi input[type=checkbox]:checked').length; // ekip geneli
       var yuzde = toplam ? Math.round(biten / toplam * 100) : 0;
 
       $('ilerlemeMetin').textContent = biten + ' / ' + toplam + ' görev tamamlandı';
@@ -778,7 +822,8 @@
 
     function kaydetTiklandi() {
       if (durum.kaydediliyor) return;
-      if (isaretliIdler().length === 0) {
+      var acikGorev = document.querySelectorAll('#gorevListesi input[type=checkbox]:not(:disabled)').length;
+      if (isaretliIdler().length === 0 && acikGorev > 0) {
         modalAc();
         return;
       }
@@ -824,10 +869,75 @@
         return;
       }
 
-      durum.kayitliHal = halOzeti();
+      if (sonuc.veri) {
+        // Sunucunun güncel ortak durumuyla yeniden çiz (diğerlerinin yaptıkları dahil)
+        ciz(sonuc.veri.kategoriler, sonuc.veri.tamamlananlar, sonuc.veri.baskalari);
+        durum.toplam = sonuc.veri.toplam;
+        durum.imza = imzaOlustur(sonuc.veri);
+        durum.kayitliNot = sonuc.veri.not || '';
+        durum.kayitliHal = kayitliHalOzeti(sonuc.veri);
+        ilerlemeGuncelle();
+      } else {
+        durum.kayitliHal = halOzeti();
+      }
       degisiklikKontrol();
       sonKayitGoster(sonuc.saat);
-      toastGoster('Tebrikler, bugünkü görevleriniz kaydedildi!');
+
+      if (sonuc.cakisanlar && sonuc.cakisanlar.length) {
+        var c = sonuc.cakisanlar[0];
+        toastGoster('Kaydedildi. "' + c.ad + '" görevini ' + c.yapan + ' sizden önce yapmış' +
+          (sonuc.cakisanlar.length > 1 ? ' (+' + (sonuc.cakisanlar.length - 1) + ' görev daha).' : '.'), 'bilgi');
+      } else {
+        toastGoster('Tebrikler, bugünkü görevleriniz kaydedildi!');
+      }
+    }
+
+    /* ─────────── Otomatik yenileme (ortak görevler) ───────────
+       Sayfa açıkken 30 sn'de bir ve uygulamaya geri dönülünce, başkalarının
+       yaptığı görevler sunucudan alınır. Kullanıcının kaydedilmemiş işaretleri
+       korunur; yalnızca az önce başkası tarafından yapılan görev kilitlenir. */
+    var yenilemeZamanlayici = null;
+    function otomatikYenilemeBaslat() {
+      if (yenilemeZamanlayici) return;
+      yenilemeZamanlayici = setInterval(sessizYenile, OTOMATIK_YENILEME_MS);
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') sessizYenile();
+      });
+    }
+
+    function sessizYenile() {
+      if (document.hidden || durum.kaydediliyor || durum.yenileniyor || !$('modal').hidden || !durum.toplam) return;
+      if (navigator.onLine === false) return;
+      durum.yenileniyor = true;
+      google.script.run
+        .withSuccessHandler(function (veri) { durum.yenileniyor = false; birlestir(veri); })
+        .withFailureHandler(function () { durum.yenileniyor = false; }) // sessiz: bir sonraki turda denenir
+        .gunlukVeriGetir(BASLANGIC.kod);
+    }
+
+    function birlestir(veri) {
+      if (durum.kaydediliyor) return;
+      if (veri.gun !== durum.gun) { yukle(); return; }
+      var yeniImza = imzaOlustur(veri);
+      if (yeniImza === durum.imza) return;
+
+      // Kaydedilmemiş değişiklik varsa kullanıcının işaretleri korunur; yoksa sunucudaki hal esas alınır
+      var degisiklikVar = halOzeti() !== durum.kayitliHal;
+      var yerel = isaretliIdler();
+      var kaptirilan = yerel.filter(function (id) { return veri.baskalari && veri.baskalari[id]; });
+      var benimkiler = degisiklikVar ? yerel : veri.tamamlananlar;
+
+      ciz(veri.kategoriler, benimkiler, veri.baskalari);
+      durum.toplam = veri.toplam;
+      durum.imza = yeniImza;
+      durum.kayitliHal = kayitliHalOzeti({ tamamlananlar: veri.tamamlananlar, not: durum.kayitliNot });
+      ilerlemeGuncelle();
+      degisiklikKontrol();
+
+      if (kaptirilan.length) {
+        var b = veri.baskalari[kaptirilan[0]];
+        toastGoster(b.ad + ' işaretlediğiniz bir görevi az önce tamamladı; liste güncellendi.', 'bilgi');
+      }
     }
 
     function kayitHatasi(hata) {

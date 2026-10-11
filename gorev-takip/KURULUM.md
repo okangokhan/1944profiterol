@@ -15,6 +15,15 @@ Personelin günlük açılış / gün içi / kapanış rutinlerini telefondan i�
 
 **Not sütunu, yalnızca günün ilk satırına yazılır.** Not tek bir görevle değil, günün tamamıyla ilgilidir. Her satıra kopyalansaydı 8 görevlik bir kayıtta aynı cümle 8 kez görünür, Kayitlar sayfası kalabalıklaşırdı. Ayrıca "Not boş değil" filtresi 8 kopya döndürürdü. İlk satıra yazıldığında bu filtre, **kişi başına günde tam bir satır** döndürür; yani günlük notların temiz bir listesini verir. Uygulama notu geri yüklerken günün dolu not hücresini okur. Özet sayfası da notu aynı yerden alır.
 
+**Görevler ortaktır.** Aynı görev birden fazla kişiye atanmışsa (ör. "Kasayı aç" herkese), biri yapıp kaydettiğinde görev diğerlerinin ekranında **"✓ Ayşe yaptı · 08:55"** olarak işaretli ve kilitli görünür. Açık ekranlar 30 saniyede bir ve uygulamaya geri dönülünce kendini yeniler.
+
+Kayitlar sayfasında Durum sütunu üç değer alır:
+- **Tamamlandı:** Görevi bu kişi bizzat yaptı.
+- **Başkası Yaptı:** Görevi başka biri yaptı. Kimin yaptığı yeni **I: Tamamlayan** sütununda yazar.
+- **Yapılmadı:** Görev yapılmadı.
+
+İki kişi aynı görevi aynı anda işaretlerse kaydı **önce kaydeden** görevi almış sayılır; diğerine "… sizden önce yapmış" bildirimi gösterilir. Kişi kendi işaretini kaldırırsa görev yeniden herkese açılır. Performans sayımı yalnızca **Tamamlandı** satırlarına bakar, yani işi fiilen yapana yazılır.
+
 **Ozet sayfası script ile hesaplanır, formülle değil.** Bunun üç nedeni var:
 - Türkçe yerel ayarda formül ayırıcısı `;` olur.
 - `QUERY` ile tarih karşılaştırmanın sözdizimi kırılgandır.
@@ -127,12 +136,18 @@ Telefondan açılan yönetici ekranında iki sekme vardır:
   - Tarih seçilir (‹ › okları ya da tarihe dokunarak). Genel tamamlama oranı, kayıt gönderen ve "Kayıt yok" sayıları görünür.
   - **Son 7 günün** tamamlanma grafiği vardır; bir güne dokunarak o güne geçilir.
   - **Kişiye göre** görünümü: her kişinin kaç görevi eksik olduğu görünür. Karta dokununca o günün görev listesi (✓/✗) ve notu açılır. Kayıt göndermeyenler en üstte yer alır; bugün için yapmaları gereken görevler ⏳ ile listelenir.
-  - **Göreve göre** görünümü: her görevin altında kim yaptı (✓), kim yapmadı (✗) ve kimden kayıt bekleniyor (⏳).
+  - **Göreve göre** görünümü: her görevin yapılıp yapılmadığı, **kimin yaptığı ve saati**, kimlere atandığı ve kimden kayıt beklendiği (⏳).
   - **Sadece yapılmayanlar** anahtarı açılınca yalnızca eksik kalan görevler ve kişiler gösterilir.
 - **Görevler**
   - Tüm görevler kategori ve Sıra'ya göre listelenir. Kişiye göre filtrelenebilir; pasif görevler isteğe bağlı gösterilir.
+  - Her kategori başlığındaki **Kategoriyi ata** düğmesiyle o kategorideki **tüm görevler** tek seferde "Herkes"e veya seçili kişilere atanır.
   - **Yeni Görev** ile görev eklenir. Bir göreve dokunarak ad, kategori, sıra, aktiflik ve **kime atanacağı** ("Herkes" ya da seçili kişiler) değiştirilir veya görev silinir.
   - Değişiklik Gorevler sayfasına yazılır ve personel ekranına **hemen** yansır.
+
+- **Performans**
+  - 7 / 30 / 90 günlük dönemde her çalışanın **bizzat yaptığı** görev sayısı ve toplam işteki payı (%) gösterilir.
+  - Çubuklardaki kesikli çizgi kişi başı ortalamadır. Ortalamanın %25 üstündekiler "Ortalamanın üstünde", %25 altındakiler "Ortalamanın altında" etiketi alır.
+  - Kişiye dokununca kayıt gönderdiği gün, günlük ortalaması, kategori dağılımı ve en çok yaptığı görevler açılır. İşi tek başına sırtlanan çalışan buradan görülür.
 
 **Kurulum**
 1. Apps Script'te **＋ > HTML** ile **`yonetici`** adlı bir dosya oluşturun ve `yonetici.html` içeriğini yapıştırın. `Code.gs`'i de güncel haliyle değiştirin, sonra kaydedin.
@@ -201,6 +216,10 @@ Telefondan açılan yönetici ekranında iki sekme vardır:
 - [ ] **Görev Takip > Yönetici Linki Oluştur** ile üretilen link açılınca "Yönetici Paneli" ekranı gelir. `?y=` değeri değiştirilince "Geçersiz yönetici bağlantısı" ekranı çıkar.
 - [ ] Bir personelin `?k=` kodu, `?y=` olarak denenince panel **açılmaz**.
 - [ ] Özet > **Göreve göre** görünümünde her görevin altında kimin yaptığı (✓), kimin yapmadığı (✗) ve bugün henüz kayıt göndermeyenler (⏳) listelenir. **Sadece yapılmayanlar** açılınca tamamen bitmiş görevler ve kişiler gizlenir.
+- [ ] **Ortak görev.** Ayşe "Kasayı aç"ı işaretleyip kaydeder. Fatma'nın açık ekranında en geç 30 sn içinde (veya uygulamaya geri dönünce) görev **"Ayşe Yılmaz yaptı · saat"** olarak kilitli görünür. Kayitlar'da Fatma'nın satırı "Başkası Yaptı", Tamamlayan "Ayşe Yılmaz" olur.
+- [ ] Ayşe ve Fatma aynı görevi işaretleyip arka arkaya kaydeder: ilk kaydeden "Tamamlandı" alır, ikinciye "… sizden önce yapmış" bildirimi çıkar.
+- [ ] **Kategoriyi ata** ile "Kapanış" yalnızca Fatma'ya atanınca Kapanış görevleri yalnızca Fatma'nın ekranında görünür.
+- [ ] **Performans** sekmesinde görevi fiilen yapan kişinin sayısı artar; "Başkası Yaptı" satırları sayılmaz.
 - [ ] Bugün kayıt göndermeyen kişinin kartı açılınca o gün yapması gereken görevler ⏳ ile görünür.
 - [ ] Özet sekmesinde tarih değiştirilince rakamlar ve grafik güncellenir. Kayıt göndermeyen kişi "Kayıt yok" olarak üstte görünür.
 - [ ] Yeni görev sadece bir kişiye atanınca yalnızca o kişinin ekranında görünür, diğerinde görünmez. Gorevler sayfasının C sütununa kişinin adı yazılır.

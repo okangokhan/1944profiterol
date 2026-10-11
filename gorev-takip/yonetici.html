@@ -48,12 +48,13 @@
       position: sticky; top: 0; z-index: 15; background: var(--bg);
       padding: 12px 0 10px; border-bottom: 1px solid var(--cizgi);
     }
-    .segment { display: grid; grid-template-columns: 1fr 1fr; background: var(--kart); border-radius: 14px; padding: 4px; box-shadow: var(--golge-md); }
+    .segment { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--kart); border-radius: 14px; padding: 4px; box-shadow: var(--golge-md); }
     .segment button {
       min-height: 44px; border: 0; border-radius: 10px; background: transparent; font-weight: 700; color: var(--yazi-soluk);
       cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background var(--gecis), color var(--gecis);
     }
     .segment button svg { width: 18px; height: 18px; }
+    @media (max-width: 440px) { .segment button { font-size: 15px; } .segment button svg { display: none; } }
     .segment button[aria-selected="true"] { background: var(--ana); color: #fff; }
 
     main { padding: 16px 0 calc(110px + env(safe-area-inset-bottom)); }
@@ -161,6 +162,48 @@
     .lejant { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--yazi-soluk); margin: 0 4px 10px; }
     .lejant span { display: inline-flex; align-items: center; gap: 4px; }
     .lejant svg { width: 13px; height: 13px; }
+    .kisi-cip.notr { background: var(--bg); color: var(--yazi-soluk); border: 1px solid var(--cizgi); }
+    .gk-durum { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+    .gk-durum svg { width: 15px; height: 15px; }
+    .gk-durum.tamam { color: var(--basari-koyu); }
+    .gk-durum.eksik { color: var(--hata); }
+    .gk-yapan { margin-top: 8px; font-size: 14px; color: var(--yazi-soluk); }
+    .gk-yapan b { color: var(--yazi); }
+    .gk-atanan { font-size: 12px; color: var(--yazi-silik); font-weight: 700; margin: 10px 0 -4px; }
+    .detay-ek { margin-left: auto; padding-left: 8px; font-size: 12px; color: var(--yazi-silik); white-space: nowrap; }
+    .detay-satir.tamam.baska span:first-of-type { color: var(--yazi-soluk); }
+
+    /* Kategori başlığı + "Kişilere ata" */
+    .kat-baslik { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 22px 4px 10px; }
+    .kat-baslik .bolum-baslik { margin: 0; }
+    .kat-ata-btn {
+      min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1.5px solid var(--cizgi); background: var(--kart);
+      color: var(--ana); font-weight: 700; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .kat-ata-btn svg { width: 16px; height: 16px; }
+    .form-bilgi { background: var(--ana-acik); color: var(--ana); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin-bottom: 14px; }
+
+    /* Performans */
+    .perf-ust { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .perf-ust small { color: var(--yazi-soluk); font-weight: 600; }
+    .perf-kart { padding: 16px; margin-top: 12px; }
+    .perf-kart h3 { margin: 0 0 2px; font-size: 15px; }
+    .perf-kart > p { margin: 0 0 12px; font-size: 13px; color: var(--yazi-soluk); }
+    .perf-satir { border: 0; background: transparent; width: 100%; text-align: left; cursor: pointer; padding: 10px 0; display: block; color: inherit; }
+    .perf-satir + .perf-satir, .perf-satir + .perf-detay + .perf-satir { border-top: 1px solid var(--cizgi); }
+    .perf-isim { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; }
+    .perf-isim .rozet { margin-left: 6px; }
+    .perf-deger { font-size: 14px; font-weight: 700; white-space: nowrap; }
+    .perf-deger small { color: var(--yazi-soluk); font-weight: 600; }
+    .perf-iz { position: relative; height: 14px; margin-top: 8px; background: var(--ana-acik); border-radius: 4px; }
+    .perf-iz i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ana); border-radius: 0 4px 4px 0; transition: width 400ms cubic-bezier(.2, .8, .2, 1); }
+    .perf-ort { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 2px dashed var(--yazi); opacity: .55; }
+    .perf-lejant { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--yazi-soluk); margin-top: 10px; }
+    .perf-lejant i { display: inline-block; height: 14px; border-left: 2px dashed var(--yazi); opacity: .55; }
+    .perf-detay { padding: 2px 0 12px; font-size: 14px; }
+    .perf-detay .detay-kat { margin-top: 10px; }
+    .perf-mini { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin-top: 6px; }
+    .perf-mini span:nth-child(even) { font-weight: 700; text-align: right; }
 
     /* ═══════════════ Görevler ═══════════════ */
     .filtre { display: flex; gap: 10px; align-items: center; }
@@ -294,6 +337,9 @@
           <button type="button" role="tab" id="sekmeGorev" aria-selected="false" aria-controls="gorevGorunum">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>Görevler
           </button>
+          <button type="button" role="tab" id="sekmePerf" aria-selected="false" aria-controls="perfGorunum">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.4 3.4-5.5 6.5-5.5s5.7 2.1 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.6.9 2.6 2.7 3 5.2"/></svg>Performans
+          </button>
         </div>
       </div>
     </nav>
@@ -322,6 +368,19 @@
         </div>
         <div id="gorevIcerik"></div>
       </section>
+
+      <!-- ═══════════ PERFORMANS ═══════════ -->
+      <section id="perfGorunum" role="tabpanel" hidden>
+        <div class="perf-ust">
+          <div class="mini-segment" id="perfDonem" style="grid-template-columns:repeat(3,1fr)">
+            <button type="button" data-gun="7" aria-pressed="false">7 gün</button>
+            <button type="button" data-gun="30" aria-pressed="true">30 gün</button>
+            <button type="button" data-gun="90" aria-pressed="false">90 gün</button>
+          </div>
+          <small id="perfAralik"></small>
+        </div>
+        <div id="perfIcerik"></div>
+      </section>
     </main>
 
     <footer class="alt" id="altBar" hidden>
@@ -338,12 +397,13 @@
     <form class="pencere" id="gorevForm" novalidate>
       <h3 id="pencereBaslik">Yeni Görev</h3>
       <div id="formHata" class="form-hata" hidden role="alert"></div>
+      <div id="formBilgi" class="form-bilgi" hidden></div>
 
-      <div class="alan">
+      <div class="alan" id="alanAd">
         <label for="fAd">Görev adı</label>
         <input type="text" id="fAd" maxlength="200" placeholder="Örn: Vitrin camlarını sil" autocomplete="off" required>
       </div>
-      <div class="alan iki-kolon">
+      <div class="alan iki-kolon" id="alanKatSira">
         <div>
           <label for="fKategori" class="etiket">Kategori</label>
           <input type="text" id="fKategori" list="kategoriListesi" maxlength="50" placeholder="Açılış" autocomplete="off">
@@ -364,7 +424,7 @@
         <div id="kisiListesi" class="kisi-liste" hidden></div>
       </div>
 
-      <div class="alan aktif-satir">
+      <div class="alan aktif-satir" id="alanAktif">
         <div><b>Aktif</b><br><small style="color:var(--yazi-soluk)">Kapalıysa görev personele gösterilmez</small></div>
         <span class="anahtar"><input type="checkbox" id="fAktif" aria-label="Aktif"><i></i></span>
       </div>
@@ -401,7 +461,13 @@
       ozetIstek: 0,
       sonOzet: null,
       gorunum: 'kisi',      // 'kisi' | 'gorev'
-      sadeceEksik: false
+      sadeceEksik: false,
+      mod: 'gorev',         // düzenleme penceresi: 'gorev' | 'kategori'
+      atanacakKategori: '',
+      perfGun: 30,
+      perfIstek: 0,
+      perfYuklendi: false,
+      acikPerf: {}
     };
 
     $('anaEkran').hidden = false;
@@ -426,15 +492,19 @@
     /* ─────────── Sekmeler ─────────── */
     $('sekmeOzet').addEventListener('click', function () { sekmeAc('ozet'); });
     $('sekmeGorev').addEventListener('click', function () { sekmeAc('gorev'); });
+    $('sekmePerf').addEventListener('click', function () { sekmeAc('perf'); });
     function sekmeAc(s) {
       durum.sekme = s;
       $('sekmeOzet').setAttribute('aria-selected', s === 'ozet');
       $('sekmeGorev').setAttribute('aria-selected', s === 'gorev');
+      $('sekmePerf').setAttribute('aria-selected', s === 'perf');
       $('ozetGorunum').hidden = s !== 'ozet';
       $('gorevGorunum').hidden = s !== 'gorev';
+      $('perfGorunum').hidden = s !== 'perf';
       $('altBar').hidden = s !== 'gorev' || !durum.gorevVeri;
-      $('baslik').textContent = s === 'ozet' ? 'Günlük Özet' : 'Görev Yönetimi';
+      $('baslik').textContent = { ozet: 'Günlük Özet', gorev: 'Görev Yönetimi', perf: 'Performans' }[s];
       if (s === 'gorev' && !durum.gorevVeri) gorevleriYukle();
+      if (s === 'perf' && !durum.perfYuklendi) perfYukle();
       window.scrollTo(0, 0);
     }
 
@@ -476,15 +546,12 @@
       var kok = $('ozetIcerik');
       kok.innerHTML = '';
       var kisiler = v.personeller;
-      var gTamam = 0, gToplam = 0, gonderen = 0, kayitYok = 0;
-      kisiler.forEach(function (k) {
-        gTamam += k.tamam; gToplam += k.toplam;
-        if (k.kayitYok) kayitYok++; else gonderen++;
-      });
+      var gTamam = v.genel ? v.genel.tamam : 0, gToplam = v.genel ? v.genel.toplam : 0, gonderen = 0, kayitYok = 0;
+      kisiler.forEach(function (k) { if (k.kayitYok) kayitYok++; else gonderen++; });
 
       // KPI kutuları
       var kpi = el('div', 'kpi');
-      kpi.appendChild(kpiKutu(gToplam ? '%' + Math.round(gTamam / gToplam * 100) : '—', 'Genel tamamlama'));
+      kpi.appendChild(kpiKutu(gToplam ? '%' + Math.round(gTamam / gToplam * 100) : '—', 'Ekip tamamlama'));
       kpi.appendChild(kpiKutu(gonderen + ' / ' + kisiler.length, 'Kayıt gönderen'));
       kpi.appendChild(kpiKutu(String(kayitYok), 'Kayıt yok', kayitYok > 0 ? 'uyari-kpi' : ''));
       kok.appendChild(kpi);
@@ -547,23 +614,33 @@
       }).forEach(function (k) { kok.appendChild(kisiKarti(k)); });
     }
 
-    /** Görev bazında: her görevi kim yaptı (✓), kim yapmadı (✗), kimden kayıt bekleniyor (⏳). */
+    /** Görev bazında: görev ORTAK olduğu için her görevin tek bir "yapan"ı vardır. */
     function gorevBazliCiz(kok, kisiler) {
       var harita = {}, sira = [];
-      function ekle(g, kisi, durumu) {
+      function bul(g) {
         var id = g.kategori + '::' + g.ad;
-        if (!harita[id]) { harita[id] = { ad: g.ad, kategori: g.kategori, kisiler: [] }; sira.push(id); }
-        harita[id].kisiler.push({ ad: kisi.ad, durum: durumu });
+        if (!harita[id]) { harita[id] = { ad: g.ad, kategori: g.kategori, yapan: '', saat: '', atananlar: [] }; sira.push(id); }
+        return harita[id];
       }
+      function yapanAyarla(h, ad, saat) { if (!h.yapan) { h.yapan = ad; h.saat = saat || ''; } }
       kisiler.forEach(function (k) {
-        k.gorevler.forEach(function (g) { ekle(g, k, g.tamam ? 'tamam' : 'eksik'); });
-        (k.bekleyen || []).forEach(function (g) { ekle(g, k, 'bekliyor'); });
+        k.gorevler.forEach(function (g) {
+          var h = bul(g);
+          h.atananlar.push({ ad: k.ad });
+          if (g.durum === 'ben') { h.yapan = k.ad; h.saat = g.saat; }
+          else if (g.durum === 'baska') yapanAyarla(h, g.yapan, g.saat);
+        });
+        (k.bekleyen || []).forEach(function (g) {
+          var h = bul(g);
+          h.atananlar.push({ ad: k.ad, bekliyor: true });
+          if (g.durum === 'baska') yapanAyarla(h, g.yapan, g.saat);
+        });
       });
 
       var lj = el('div', 'lejant');
-      lj.innerHTML = '<span style="color:var(--basari-koyu)">' + IKON.tamam + 'Yaptı</span>' +
-        '<span style="color:var(--hata)">' + IKON.eksik + 'Yapmadı</span>' +
-        '<span style="color:var(--uyari)">' + IKON.bekliyor + 'Kayıt bekleniyor</span>';
+      lj.innerHTML = '<span style="color:var(--basari-koyu)">' + IKON.tamam + 'Yapıldı</span>' +
+        '<span style="color:var(--hata)">' + IKON.eksik + 'Yapılmadı</span>' +
+        '<span style="color:var(--uyari)">' + IKON.bekliyor + 'Kayıt göndermedi</span>';
       kok.appendChild(lj);
 
       if (!sira.length) {
@@ -574,8 +651,7 @@
       var kartlar = {}, gosterildi = 0;
       sira.forEach(function (id) {
         var g = harita[id];
-        var yapan = g.kisiler.filter(function (x) { return x.durum === 'tamam'; }).length;
-        if (durum.sadeceEksik && yapan === g.kisiler.length) return;
+        if (durum.sadeceEksik && g.yapan) return;
         gosterildi++;
         if (!kartlar[g.kategori]) {
           var bb = el('div', 'bolum-baslik'); bb.textContent = g.kategori; kok.appendChild(bb);
@@ -584,25 +660,30 @@
         var gk = el('div', 'gk');
         var ust = el('div', 'gk-ust');
         var ad = el('div', 'gk-ad'); ad.textContent = g.ad;
-        var sayi = el('div', 'gk-sayi sayi' + (yapan === g.kisiler.length ? ' tam' : ''));
-        sayi.textContent = yapan + ' / ' + g.kisiler.length + ' kişi';
-        ust.appendChild(ad); ust.appendChild(sayi); gk.appendChild(ust);
-        var bar = el('div', 'mini-bar' + (yapan === g.kisiler.length ? ' tam' : ''));
-        var dol = el('i'); dol.style.width = Math.round(yapan / g.kisiler.length * 100) + '%'; bar.appendChild(dol);
-        gk.appendChild(bar);
+        var dr = el('span', 'gk-durum ' + (g.yapan ? 'tamam' : 'eksik'));
+        dr.innerHTML = g.yapan ? IKON.tamam : IKON.eksik;
+        var dy = el('span'); dy.textContent = g.yapan ? 'Yapıldı' : 'Yapılmadı'; dr.appendChild(dy);
+        ust.appendChild(ad); ust.appendChild(dr); gk.appendChild(ust);
+
+        if (g.yapan) {
+          var y = el('div', 'gk-yapan');
+          var yb = el('b'); yb.textContent = g.yapan;
+          y.appendChild(yb);
+          y.appendChild(document.createTextNode(' yaptı' + (g.saat ? ' · ' + g.saat : '')));
+          gk.appendChild(y);
+        }
+        var at = el('div', 'gk-atanan'); at.textContent = 'ATANAN'; gk.appendChild(at);
         var cipler = el('div', 'kisi-cipler');
-        var oncelik = { eksik: 0, bekliyor: 1, tamam: 2 };
-        g.kisiler.slice().sort(function (a, b) { return oncelik[a.durum] - oncelik[b.durum] || a.ad.localeCompare(b.ad, 'tr'); })
-          .forEach(function (x) {
-            var c = el('span', 'kisi-cip ' + x.durum);
-            c.innerHTML = IKON[x.durum];
-            var t = el('span'); t.textContent = x.ad; c.appendChild(t);
-            cipler.appendChild(c);
-          });
+        g.atananlar.slice().sort(function (a, b) { return a.ad.localeCompare(b.ad, 'tr'); }).forEach(function (x) {
+          var c = el('span', 'kisi-cip ' + (x.bekliyor && !g.yapan ? 'bekliyor' : 'notr'));
+          if (x.bekliyor && !g.yapan) c.innerHTML = IKON.bekliyor;
+          var t = el('span'); t.textContent = x.ad; c.appendChild(t);
+          cipler.appendChild(c);
+        });
         gk.appendChild(cipler);
         kartlar[g.kategori].appendChild(gk);
       });
-      if (!gosterildi) kok.appendChild(tamamKarti('Tüm görevler herkes tarafından tamamlanmış.'));
+      if (!gosterildi) kok.appendChild(tamamKarti('Bu günün bütün görevleri yapılmış.'));
     }
 
     function tamamKarti(metin) {
@@ -669,6 +750,7 @@
         var dol = el('i'); dol.style.width = Math.round(oranK * 100) + '%'; bar.appendChild(dol);
         var sayi = el('span', 'sayi'); sayi.textContent = k.tamam + '/' + k.toplam;
         alt.appendChild(bar); alt.appendChild(sayi);
+        var kd = el('span'); kd.textContent = '· kendisi ' + k.kendi; alt.appendChild(kd);
         if (k.toplam - k.tamam > 0) { var ek = el('span', 'eksik-yazi'); ek.textContent = '· ' + (k.toplam - k.tamam) + ' eksik'; alt.appendChild(ek); }
         if (k.son) { var s = el('span', 'sayi'); s.textContent = '· ' + k.son; alt.appendChild(s); }
       }
@@ -686,8 +768,12 @@
 
       var detay = el('div', 'kisi-detay');
       detay.hidden = !durum.acikKisiler[k.kod];
-      var detayListe = k.kayitYok ? (k.bekleyen || []).map(function (g) { return { ad: g.ad, kategori: g.kategori, durum: 'bekliyor' }; })
-        : k.gorevler.map(function (g) { return { ad: g.ad, kategori: g.kategori, durum: g.tamam ? 'tamam' : 'eksik' }; });
+      // ben → kendisi yaptı, baska → ortak görevi başkası yaptı, yok → yapılmadı, bekliyor → kayıt göndermedi
+      var detayListe = (k.kayitYok ? (k.bekleyen || []) : k.gorevler).map(function (g) {
+        var d = (g.durum === 'ben' || g.durum === 'baska') ? 'tamam' : (g.durum === 'bekliyor' ? 'bekliyor' : 'eksik');
+        var ek = g.durum === 'baska' ? g.yapan + ' yaptı' + (g.saat ? ' · ' + g.saat : '') : (g.durum === 'ben' ? (g.saat || '') : '');
+        return { ad: g.ad, kategori: g.kategori, durum: d, baska: g.durum === 'baska', ek: ek };
+      });
       if (k.kayitYok) {
         var p = el('p', 'detay-bilgi');
         p.textContent = detayListe.length ? 'Henüz kayıt göndermedi. Bugün yapması gereken görevler:' : 'Bu gün için kayıt gönderilmemiş.';
@@ -705,9 +791,10 @@
             sonKat = g.kategori;
             var kt = el('div', 'detay-kat'); kt.textContent = g.kategori; detay.appendChild(kt);
           }
-          var satir = el('div', 'detay-satir ' + g.durum);
+          var satir = el('div', 'detay-satir ' + g.durum + (g.baska ? ' baska' : ''));
           satir.innerHTML = IKON[g.durum];
           var t = el('span'); t.textContent = g.ad; satir.appendChild(t);
+          if (g.ek) { var e2 = el('span', 'detay-ek sayi'); e2.textContent = g.ek; satir.appendChild(e2); }
           detay.appendChild(satir);
         });
         if (k.not) {
@@ -787,7 +874,14 @@
         var grup = liste.filter(function (g) { return g.kategori === kat; })
           .sort(function (a, b) { return (a.sira === '' ? 1e9 : a.sira) - (b.sira === '' ? 1e9 : b.sira) || a.satir - b.satir; });
         if (!grup.length) return;
-        var bb = el('div', 'bolum-baslik'); bb.textContent = kat + ' · ' + grup.length; kok.appendChild(bb);
+        var kb = el('div', 'kat-baslik');
+        var bb = el('div', 'bolum-baslik'); bb.textContent = kat + ' · ' + grup.length;
+        var ata = el('button', 'kat-ata-btn'); ata.type = 'button';
+        ata.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.4 3.4-5.5 6.5-5.5s5.7 2.1 6.5 5.5M19 8v6M16 11h6"/></svg>';
+        var at = el('span'); at.textContent = 'Kategoriyi ata'; ata.appendChild(at);
+        ata.setAttribute('aria-label', kat + ' kategorisindeki tüm görevleri kişilere ata');
+        ata.addEventListener('click', function () { kategoriPencereAc(kat); });
+        kb.appendChild(bb); kb.appendChild(ata); kok.appendChild(kb);
         var kart = el('div', 'kart');
         grup.forEach(function (g) {
           var satir = el('button', 'gorev-satir' + (g.aktif ? '' : ' pasif'));
@@ -816,11 +910,80 @@
     $('iptalBtn').addEventListener('click', pencereKapat);
     $('perde').addEventListener('click', function (e) { if (e.target === this) pencereKapat(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') pencereKapat(); });
-    $('gorevForm').addEventListener('submit', function (e) { e.preventDefault(); gorevKaydet(); });
+    $('gorevForm').addEventListener('submit', function (e) { e.preventDefault(); if (durum.mod === 'kategori') kategoriKaydet(); else gorevKaydet(); });
     $('silBtn').addEventListener('click', gorevSil);
+
+    /** Pencerede görev alanlarını göster/gizle (kategori atamada yalnızca kişi seçimi görünür). */
+    function pencereModu(mod) {
+      durum.mod = mod;
+      var gorev = mod === 'gorev';
+      $('alanAd').hidden = !gorev; $('alanKatSira').hidden = !gorev; $('alanAktif').hidden = !gorev;
+      $('formBilgi').hidden = gorev;
+    }
+
+    /** Atama listesini (Herkes / seçili kişiler) doldurur. */
+    function kisiListesiDoldur(herkes, secili) {
+      var v = durum.gorevVeri;
+      $('fHerkes').checked = herkes;
+      $('fSecili').checked = !herkes;
+      var kl = $('kisiListesi'); kl.innerHTML = '';
+      v.personeller.forEach(function (p) {
+        var lb = el('label', 'kisi-sec');
+        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = p.kod; cb.checked = secili.indexOf(p.kod) !== -1;
+        var ad = el('span'); ad.textContent = p.ad;
+        lb.appendChild(cb); lb.appendChild(ad);
+        if (!p.aktif) { var sm = el('small'); sm.textContent = '(pasif)'; lb.appendChild(sm); }
+        kl.appendChild(lb);
+      });
+    }
+
+    function kategoriPencereAc(kat) {
+      var v = durum.gorevVeri; if (!v) return;
+      var grup = v.gorevler.filter(function (g) { return g.kategori === kat; });
+      durum.atanacakKategori = kat;
+      durum.duzenlenen = null;
+      pencereModu('kategori');
+      $('pencereBaslik').textContent = '"' + kat + '" kategorisini ata';
+      $('formHata').hidden = true;
+
+      // Kategorideki görevlerin ataması ortaksa onu göster, değilse boş başla
+      var imzalar = grup.map(function (g) { return g.herkes ? '*' : g.atananKodlar.slice().sort().join(','); });
+      var ayni = imzalar.every(function (x) { return x === imzalar[0]; });
+      var herkes = ayni && imzalar[0] === '*';
+      var secili = ayni && !herkes ? grup[0].atananKodlar : [];
+      $('formBilgi').textContent = 'Bu kategorideki ' + grup.length + ' görevin' + (grup.length > 1 ? ' tamamı' : '') +
+        ' seçtiğiniz kişilere atanır.' + (ayni ? '' : ' Şu an görevlerin atamaları birbirinden farklı.');
+      kisiListesiDoldur(herkes, secili);
+      if (!ayni) $('fSecili').checked = true;
+      $('silBtn').hidden = true;
+      $('pencereBaslik').parentNode.querySelector('.pencere-butonlar').style.gridTemplateColumns = '1fr 1.4fr';
+      atamaGuncelle();
+      $('perde').hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+
+    function kategoriKaydet() {
+      if (durum.mesgul) return;
+      var herkes = $('fHerkes').checked;
+      var kodlar = Array.prototype.map.call($('kisiListesi').querySelectorAll('input:checked'), function (c) { return c.value; });
+      if (!herkes && !kodlar.length) { formHata('En az bir kişi seçin ya da "Herkes"i işaretleyin.'); return; }
+      $('formHata').hidden = true;
+      mesgulAyarla(true);
+      cagir('yoneticiKategoriAta', YK, durum.atanacakKategori, herkes, kodlar).then(function (v) {
+        mesgulAyarla(false);
+        pencereKapat();
+        gorevVerisiAl(v);
+        toast('"' + durum.atanacakKategori + '" kategorisindeki ' + v.guncellenen + ' görev atandı.');
+      }).catch(function (h) {
+        mesgulAyarla(false);
+        formHata(hataMetni(h));
+        cagir('yoneticiGorevleriGetir', YK).then(gorevVerisiAl);
+      });
+    }
 
     function pencereAc(g) {
       var v = durum.gorevVeri; if (!v) return;
+      pencereModu('gorev');
       durum.duzenlenen = g;
       $('pencereBaslik').textContent = g ? 'Görevi Düzenle' : 'Yeni Görev';
       $('formHata').hidden = true;
@@ -835,18 +998,8 @@
       var filtreKisi = $('kisiFiltre').value;
       var herkes = g ? g.herkes : !filtreKisi;
       var secili = g ? g.atananKodlar : (filtreKisi ? [filtreKisi] : []);
-      $('fHerkes').checked = herkes;
-      $('fSecili').checked = !herkes;
-
-      var kl = $('kisiListesi'); kl.innerHTML = '';
-      v.personeller.forEach(function (p) {
-        var lb = el('label', 'kisi-sec');
-        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = p.kod; cb.checked = secili.indexOf(p.kod) !== -1;
-        var ad = el('span'); ad.textContent = p.ad;
-        lb.appendChild(cb); lb.appendChild(ad);
-        if (!p.aktif) { var sm = el('small'); sm.textContent = '(pasif)'; lb.appendChild(sm); }
-        kl.appendChild(lb);
-      });
+      kisiListesiDoldur(herkes, secili);
+      var kl = $('kisiListesi');
       if (g && g.bilinmeyen.length) {
         var u = el('div'); u.style.cssText = 'padding:10px 14px;font-size:13px;color:var(--hata);border-top:1px solid var(--cizgi)';
         u.textContent = 'Tabloda tanınmayan isim: ' + g.bilinmeyen.join(', ') + '. Kaydedince bu isim kaldırılır.';
@@ -929,6 +1082,108 @@
         formHata(m);
         if (/değişmiş/.test(m)) cagir('yoneticiGorevleriGetir', YK).then(gorevVerisiAl);
       });
+    }
+
+    /* ═══════════════════ PERFORMANS ═══════════════════
+       Görevler ortak olduğu için her görev, onu fiilen yapan kişiye sayılır.
+       Böylece işi sahiplenen ile geride kalan kıyaslanabilir. */
+    Array.prototype.forEach.call($('perfDonem').children, function (b) {
+      b.addEventListener('click', function () {
+        durum.perfGun = Number(b.getAttribute('data-gun'));
+        Array.prototype.forEach.call($('perfDonem').children, function (c) { c.setAttribute('aria-pressed', c === b); });
+        perfYukle();
+      });
+    });
+
+    function perfYukle() {
+      var no = ++durum.perfIstek;
+      durum.perfYuklendi = true;
+      $('perfIcerik').innerHTML = '<div class="kpi">' + '<div class="isk" style="height:72px"></div>'.repeat(3) + '</div>' +
+        '<div class="isk" style="height:260px;margin-top:12px"></div>';
+      cagir('yoneticiPerformansGetir', YK, durum.perfGun).then(function (v) {
+        if (no === durum.perfIstek) perfCiz(v);
+      }).catch(function (h) {
+        if (no !== durum.perfIstek) return;
+        durum.perfYuklendi = false;
+        hataKartiGoster($('perfIcerik'), 'Performans yüklenemedi', hataMetni(h), perfYukle);
+      });
+    }
+
+    function perfCiz(v) {
+      $('perfAralik').textContent = v.aralikMetni;
+      var kok = $('perfIcerik'); kok.innerHTML = '';
+      var kpi = el('div', 'kpi');
+      kpi.appendChild(kpiKutu(String(v.toplam), 'Yapılan görev'));
+      kpi.appendChild(kpiKutu(String(v.ortalama).replace('.', ','), 'Kişi başı ort.'));
+      kpi.appendChild(kpiKutu(String(v.ekipGunu), 'Kayıtlı gün'));
+      kok.appendChild(kpi);
+
+      var kart = el('div', 'kart perf-kart');
+      var h = el('h3'); h.textContent = 'Kim ne kadar yaptı?';
+      var a = el('p'); a.textContent = 'Ortak görevler, onu fiilen yapan kişiye sayılır. Ayrıntı için kişiye dokunun.';
+      kart.appendChild(h); kart.appendChild(a);
+
+      if (!v.kisiler.length || !v.toplam) {
+        var bos = el('p'); bos.style.cssText = 'margin:8px 0 0;color:var(--yazi-soluk)'; bos.textContent = 'Bu dönemde tamamlanan görev yok.';
+        kart.appendChild(bos); kok.appendChild(kart); return;
+      }
+
+      var enCok = Math.max.apply(null, v.kisiler.map(function (k) { return k.yapilan; })) || 1;
+      v.kisiler.forEach(function (k) {
+        var satir = el('button', 'perf-satir'); satir.type = 'button';
+        satir.setAttribute('aria-expanded', !!durum.acikPerf[k.kod]);
+        var isim = el('div', 'perf-isim');
+        var sol = el('span'); sol.textContent = k.ad;
+        if (v.ortalama > 0 && k.yapilan >= v.ortalama * 1.25) sol.appendChild(rozet('notr', 'Ortalamanın üstünde', '<path d="M12 19V5M6 11l6-6 6 6"/>'));
+        else if (v.ortalama > 0 && k.yapilan <= v.ortalama * 0.75) sol.appendChild(rozet('uyari', 'Ortalamanın altında', '<path d="M12 5v14M6 13l6 6 6-6"/>'));
+        if (!k.aktif) sol.appendChild(rozet('pasif', 'Pasif', ''));
+        var deger = el('span', 'perf-deger sayi');
+        deger.textContent = k.yapilan + ' ';
+        var pay = el('small'); pay.textContent = '· %' + Math.round(k.pay * 100); deger.appendChild(pay);
+        isim.appendChild(sol); isim.appendChild(deger);
+        var iz = el('div', 'perf-iz');
+        var dol = el('i'); dol.style.width = (k.yapilan / enCok * 100) + '%'; iz.appendChild(dol);
+        var ort = el('span', 'perf-ort'); ort.style.left = Math.min(v.ortalama / enCok * 100, 100) + '%'; iz.appendChild(ort);
+        satir.title = k.ad + ': ' + k.yapilan + ' görev (%' + Math.round(k.pay * 100) + ' pay)';
+        satir.appendChild(isim); satir.appendChild(iz);
+        kart.appendChild(satir);
+
+        var detay = el('div', 'perf-detay'); detay.hidden = !durum.acikPerf[k.kod];
+        var bilgi = el('div', 'perf-mini');
+        [['Kayıt gönderdiği gün', k.kayitGunu], ['Günlük ortalama', String(k.gunlukOrt).replace('.', ',') + ' görev']].forEach(function (x) {
+          var s1 = el('span'); s1.textContent = x[0]; var s2 = el('span', 'sayi'); s2.textContent = x[1];
+          bilgi.appendChild(s1); bilgi.appendChild(s2);
+        });
+        detay.appendChild(bilgi);
+        if (k.kategoriler.length) {
+          var kt = el('div', 'detay-kat'); kt.textContent = 'Kategoriye göre'; detay.appendChild(kt);
+          var km = el('div', 'perf-mini');
+          k.kategoriler.forEach(function (c) {
+            var s1 = el('span'); s1.textContent = c.ad; var s2 = el('span', 'sayi'); s2.textContent = c.adet;
+            km.appendChild(s1); km.appendChild(s2);
+          });
+          detay.appendChild(km);
+        }
+        if (k.enCok.length) {
+          var et = el('div', 'detay-kat'); et.textContent = 'En çok yaptığı görevler'; detay.appendChild(et);
+          var em = el('div', 'perf-mini');
+          k.enCok.forEach(function (g) {
+            var s1 = el('span'); s1.textContent = g.ad; var s2 = el('span', 'sayi'); s2.textContent = '×' + g.adet;
+            em.appendChild(s1); em.appendChild(s2);
+          });
+          detay.appendChild(em);
+        }
+        kart.appendChild(detay);
+        satir.addEventListener('click', function () {
+          var acik = !durum.acikPerf[k.kod];
+          durum.acikPerf[k.kod] = acik; detay.hidden = !acik; satir.setAttribute('aria-expanded', acik);
+        });
+      });
+      var lj = el('div', 'perf-lejant');
+      lj.innerHTML = '<i></i>';
+      var lt = el('span'); lt.textContent = 'Kişi başı ortalama (' + String(v.ortalama).replace('.', ',') + ')'; lj.appendChild(lt);
+      kart.appendChild(lj);
+      kok.appendChild(kart);
     }
 
     /* ─────────── Ortak yardımcılar ─────────── */
