@@ -116,7 +116,12 @@ Test etmek için **Dağıt > Dağıtımları test et** ekranındaki `/dev` URL's
    - Bir link sızarsa o kişinin **Kod** hücresini silin ve menüyü tekrar çalıştırın. Yeni kod ve link üretilir, eski link çalışmaz.
    - İşten ayrılan personel için **Aktif** = `Hayır` yapın. Link anında geçersiz olur.
 
-**Görevleri düzenleme:** **Gorevler** sayfasında satır ekleyin veya silin. **Aktif** = `Hayır` ile görevi gizleyebilir, **Sıra** ile kategori içindeki sıralamayı belirleyebilirsiniz. Kategoriler *Açılış → Gün İçi → Kapanış* sırasıyla gösterilir. Bunların dışındaki kategoriler sona eklenir. Değişiklikler kod dağıtımı gerektirmez.
+**Görevleri düzenleme:** **Gorevler** sayfasında satır ekleyin veya silin. **Aktif** = `Hayır` ile görevi gizleyebilir, **Sıra** ile kategori içindeki sıralamayı belirleyebilirsiniz. Değişiklikler kod dağıtımı gerektirmez.
+
+**Sıralama (her ekranda aynı):**
+- **Kategoriler**, Gorevler sayfasında **ilk göründükleri satır sırasıyla** dizilir. Bir kategoriyi yukarı almak için o kategorinin görevlerini sayfada üst satırlara taşıyın.
+- **Görevler** kategori içinde **Sıra** sütununa göre dizilir. Sıra boşsa ya da iki görevin Sırası aynıysa sayfadaki satır sırası esas alınır.
+- Personel ekranı, yönetici panelinin Görevler sekmesi ve özet bu kuralı birlikte kullanır.
 
 **Özet:** **Ozet** sayfasındaki **B2** hücresine bir tarih yazın. Personel bazında tamamlanan, toplam, yüzde, son kayıt saati ve not otomatik dolar. Kayıt göndermemiş aktif personel "Kayıt yok" olarak görünür.
 
@@ -176,7 +181,7 @@ Telefondan açılan yönetici ekranında iki sekme vardır:
 ### Görev listesi
 - [ ] Atanan Personel sütunu boş olan görevler herkeste görünür. İsim veya kod yazılı olanlar yalnızca o kişilerde görünür. Virgülle iki isim yazıldığında ikisinde de görünür.
 - [ ] **Aktif** = `Hayır` görevler görünmez.
-- [ ] Kategoriler Açılış → Gün İçi → Kapanış sırasıyla, görevler **Sıra** değerine göre listelenir.
+- [ ] Kategoriler Gorevler sayfasındaki ilk görünüş sırasıyla, görevler kategori içinde **Sıra** değerine (boşsa satır sırasına) göre listelenir. Personel ekranındaki sıra, yönetici panelinin Görevler sekmesindeki sırayla birebir aynıdır.
 - [ ] Hiç görevi olmayan kişide "Size atanmış aktif görev bulunmuyor." mesajı çıkar.
 - [ ] Satırın herhangi bir yerine dokununca kutu işaretlenir: yeşil tik ve üstü çizili yazı görünür. "5 / 8 görev tamamlandı" sayacı ve çubuk anında güncellenir.
 

@@ -57,7 +57,8 @@ const CONFIG = Object.freeze({
   // Görevler ORTAKTIR: biri yapınca aynı görev diğer atananlarda "Başkası Yaptı" olur.
   DURUM: Object.freeze({ TAMAM: 'Tamamlandı', YAPILMADI: 'Yapılmadı', BASKASI: 'Başkası Yaptı' }),
 
-  // Kategoriler bu sırayla gösterilir; listede olmayanlar sona eklenir.
+  // Yalnızca ÖNERİ: Gorevler sayfasındaki açılır listede ve yeni görev eklerken çıkar.
+  // Ekranlardaki sıra bu listeye değil, Gorevler sayfasındaki satır sırasına göredir (gorevSirala_).
   KATEGORI_SIRASI: ['Açılış', 'Gün İçi', 'Kapanış'],
   VARSAYILAN_KATEGORI: 'Genel',
 
@@ -418,23 +419,27 @@ function atanmisGorevler_(personel, taze) {
     return { id: gorevId_(g.kategori, g.ad), ad: g.ad, kategori: g.kategori, sira: g.sira, satir: g.satir };
   });
 
-  // Kategori sıralama anahtarı: önce CONFIG.KATEGORI_SIRASI, sonra en küçük Sıra değeri
-  const bilinen = CONFIG.KATEGORI_SIRASI.map(metinNormalize_);
-  const katAnahtar = {};
-  liste.forEach(function (g) {
-    const k = g.kategori;
-    const idx = bilinen.indexOf(metinNormalize_(k));
-    if (!katAnahtar[k]) katAnahtar[k] = { idx: idx === -1 ? 999 : idx, minSira: g.sira, ilkSatir: g.satir };
-    katAnahtar[k].minSira = Math.min(katAnahtar[k].minSira, g.sira);
-    katAnahtar[k].ilkSatir = Math.min(katAnahtar[k].ilkSatir, g.satir);
-  });
+  return gorevSirala_(liste);
+}
 
-  liste.sort(function (a, b) {
-    const ka = katAnahtar[a.kategori], kb = katAnahtar[b.kategori];
-    return (ka.idx - kb.idx) || (ka.minSira - kb.minSira) || (ka.ilkSatir - kb.ilkSatir) ||
-           (a.sira - b.sira) || (a.satir - b.satir);
+/**
+ * TEK SIRALAMA KURALI (personel ekranı, yönetici paneli ve özet aynı kuralı kullanır):
+ *   • Kategoriler, Gorevler sayfasında İLK GÖRÜNDÜKLERİ satır sırasıyla dizilir.
+ *     (Bir kategoriyi yukarı almak için o kategorinin bir görevini üst satırlara taşıyın.)
+ *   • Kategori içinde görevler "Sıra" sütununa göre, Sıra boşsa / eşitse satır sırasına göre dizilir.
+ * Her öğede { kategori, sira, satir } bulunmalıdır.
+ */
+function gorevSirala_(liste) {
+  const ilkSatir = {};
+  liste.forEach(function (g) {
+    const k = metinNormalize_(g.kategori);
+    if (!(k in ilkSatir) || g.satir < ilkSatir[k]) ilkSatir[k] = g.satir;
   });
-  return liste;
+  function siraDegeri(x) { return (x === '' || x == null || isNaN(Number(x))) ? 1e9 : Number(x); }
+  return liste.sort(function (a, b) {
+    return (ilkSatir[metinNormalize_(a.kategori)] - ilkSatir[metinNormalize_(b.kategori)]) ||
+           (siraDegeri(a.sira) - siraDegeri(b.sira)) || (a.satir - b.satir);
+  });
 }
 
 /** Sıralı görev listesini istemcinin beklediği kategori gruplarına çevirir. */
@@ -1534,9 +1539,12 @@ function yoneticiGorevVerisi_() {
     });
   }
 
-  // Kategori sırası: önce CONFIG.KATEGORI_SIRASI, sonra tablodaki ilk görünüş sırası
-  const kategoriler = CONFIG.KATEGORI_SIRASI.slice();
+  // Personel ekranıyla aynı sıralama: kategoriler tablodaki ilk görünüş sırasıyla
+  gorevSirala_(gorevler);
+  const kategoriler = [];
   gorevler.forEach(function (g) { if (kategoriler.indexOf(g.kategori) === -1) kategoriler.push(g.kategori); });
+  // Henüz görevi olmayan önerilen kategoriler, yeni görev eklerken seçilebilsin diye sona eklenir
+  CONFIG.KATEGORI_SIRASI.forEach(function (k) { if (kategoriler.indexOf(k) === -1) kategoriler.push(k); });
 
   return { gorevler: gorevler, personeller: personel, kategoriler: kategoriler };
 }
