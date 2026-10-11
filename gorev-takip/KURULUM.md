@@ -159,6 +159,17 @@ Telefondan açılan yönetici ekranında iki sekme vardır:
 2. **Dağıt > Dağıtımları yönet > ✏ Düzenle > Sürüm: Yeni sürüm > Dağıt**. Personel linkleri değişmez.
 3. E-tabloyu yenileyin (F5) ve **Görev Takip > Yönetici Linki Oluştur**'u seçin. Kimin için olduğunu yazın. Açılan penceredeki linki **Linki Kopyala** ile alın ve telefonunuzda açın; isterseniz ana ekrana ekleyin.
 
+### 11. Görev atama bildirimleri
+Yönetici panelinden bir görev birine **yeni** atandığında iki şey olur:
+- **Uygulama içi bildirim (otomatik):** Kişinin ekranında üstte **"🔔 Size yeni görev atandı"** kutusu çıkar ve yeni görevde **YENİ** etiketi görünür. Uygulama açıksa en geç 30 sn içinde gelir; kapalıysa bir sonraki açılışta görünür. Kişi **Tamam, gördüm** deyince bildirim okundu sayılır.
+- **WhatsApp (isteğe bağlı):** Kaydettikten sonra panelde görevi yeni alan kişiler listelenir. **WhatsApp ile bildir** düğmesi, *"Merhaba Ayşe, tarafınıza yeni görev atandı…"* mesajı ve kişinin kendi linkiyle WhatsApp'ı açar; siz **Gönder**'e basarsınız.
+
+Kurallar ve ayarlar:
+- **Telefon numaraları:** Personel sayfasının **E: Telefon** sütununa yazın (ör. `0532 123 45 67`). Numara yoksa WhatsApp açılınca kişiyi siz seçersiniz.
+- **Kim bildirim alır:** Yalnızca görevi **yeni alan** kişi. Zaten atanmış görevin adını, sırasını vb. düzenlemek bildirim üretmez. "Herkes"e atanan görevde tüm aktif personel bildirim alır. Pasif görev aktif yapılınca atananlar bildirim alır.
+- **Kayıt:** Bildirimler **Bildirimler** sayfasında tutulur: kime, hangi görev, ne zaman, okundu mu ve okunma saati. Okunmuş bildirimler 30 gün sonra kendiliğinden silinir.
+- **Elle düzenleme:** Gorevler sayfası elle düzenlenirse bildirim gitmez. Bildirim yalnızca yönetici panelinden yapılan atamalarda oluşur.
+
 **Güvenlik:** Yönetici kodları 24 karakterdir ve e-tabloda değil, betiğin gizli ayarlarında (Script Properties) saklanır. E-tabloyu görebilen biri bile bu kodları göremez. Link sızarsa **Görev Takip > Tüm Yönetici Linklerini İptal Et** ile hepsini geçersiz kılıp yenisini oluşturun.
 
 ---
@@ -231,6 +242,13 @@ Telefondan açılan yönetici ekranında iki sekme vardır:
 - [ ] Aynı kategoride aynı adla ikinci görev eklenmek istenince uyarı çıkar.
 - [ ] Görevi "Aktif" kapalı kaydedince personel ekranından kalkar. Sil'e basınca Gorevler sayfasından silinir, geçmiş Kayitlar silinmez.
 - [ ] **Tüm Yönetici Linklerini İptal Et** sonrası eski yönetici linki çalışmaz.
+
+### Bildirimler
+- [ ] Panelden yeni bir görev yalnızca Fatma'ya atanınca "WhatsApp ile bildir" penceresi çıkar. Fatma'nın açık ekranında en geç 30 sn içinde "Size yeni bir görev atandı" kutusu ve YENİ etiketi görünür; Ayşe'nin ekranında görünmez.
+- [ ] Fatma **Tamam, gördüm** deyince kutu kapanır; Bildirimler sayfasında Durum "Okundu" ve okunma saati yazılır. Sayfa yenilenince kutu tekrar çıkmaz.
+- [ ] Aynı görevin yalnızca adını değiştirmek bildirim üretmez.
+- [ ] **Kategoriyi ata** ile yeni kişiler eklenince yalnızca yeni eklenen kişiler bildirim alır.
+- [ ] Telefonu kayıtlı kişide WhatsApp doğrudan o kişiyle, kayıtlı olmayanda kişi seçme ekranıyla açılır. Mesaj genel metin ve kişinin kendi linkini içerir.
 
 ### Yönetici (e-tablo)
 - [ ] **Görev Takip > Personel Linklerini Oluştur.** Kodu boş olana kod üretilir ve D sütununa `/exec?k=…` linki yazılır.

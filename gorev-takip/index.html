@@ -223,6 +223,24 @@
     .gorev-metin { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .gorev-alt { font-size: 13px; font-weight: 600; color: var(--basari-koyu); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
     .gorev-alt svg { width: 14px; height: 14px; flex: none; }
+    /* Yeni görev bildirimi */
+    .bildirim-kutu {
+      display: flex; gap: 12px; align-items: flex-start; background: var(--kart); border-radius: var(--radius);
+      box-shadow: var(--golge-md); border-left: 5px solid var(--ana); padding: 14px 16px; margin-bottom: 18px;
+      animation: bildirimGir 360ms cubic-bezier(.2, .9, .3, 1.2);
+    }
+    @keyframes bildirimGir { from { transform: translateY(-8px); opacity: 0; } }
+    .bildirim-ikon { flex: none; width: 40px; height: 40px; border-radius: 12px; background: var(--ana-acik); color: var(--ana); display: grid; place-items: center; }
+    .bildirim-ikon svg { width: 22px; height: 22px; animation: zil 1.2s ease 2; transform-origin: 50% 10%; }
+    @keyframes zil { 0%, 50%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(14deg); } 20%, 40% { transform: rotate(-14deg); } }
+    .bildirim-govde { flex: 1; min-width: 0; }
+    .bildirim-govde strong { display: block; font-size: 16px; margin-bottom: 4px; }
+    .bildirim-govde ul { margin: 0 0 10px; padding-left: 18px; color: var(--yazi-soluk); font-size: 14px; }
+    .bildirim-govde li { margin: 2px 0; }
+    .btn-tamam { min-height: 44px; padding: 0 18px; border-radius: 12px; border: 0; background: var(--ana); color: #fff; font-weight: 700; cursor: pointer; }
+    .yeni-etiket { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 6px; background: var(--ana); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .5px; vertical-align: 2px; text-decoration: none; }
+    .gorev.yeni { box-shadow: inset 4px 0 0 var(--ana); }
+
     /* Görevi bugün başka biri yaptı: işaretli, kilitli */
     .gorev.baskasi { cursor: default; }
     .gorev.baskasi:active { background: linear-gradient(90deg, var(--basari-acik), transparent 70%); }
@@ -506,6 +524,15 @@
     </div>
 
     <main class="kapsayici icerik">
+      <div id="bildirimKutu" class="bildirim-kutu" role="status" aria-live="polite" hidden>
+        <span class="bildirim-ikon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+        <div class="bildirim-govde">
+          <strong id="bildirimBaslik">Size yeni görev atandı</strong>
+          <ul id="bildirimListe"></ul>
+          <button type="button" class="btn-tamam" id="bildirimTamam">Tamam, gördüm</button>
+        </div>
+      </div>
+
       <div id="hataKutu" class="hata-kutu" role="alert" hidden>
         <span class="h-ikon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
@@ -605,7 +632,10 @@
       zamanlayici: null,
       kayitliNot: '',       // Sunucudaki son not
       imza: '',             // Liste + başkalarının yaptıkları (otomatik yenilemede değişiklik tespiti)
-      yenileniyor: false
+      yenileniyor: false,
+      yuklendi: false,
+      yeniIdler: {},        // Okunmamış bildirimi olan görevler ("YENİ" etiketi)
+      kapatilan: {}         // Bu oturumda "Tamam" denmiş bildirimler (sunucu yanıtı gecikse de tekrar açılmasın)
     };
     var OTOMATIK_YENILEME_MS = 30000; // Ortak görevlerde başkalarının işaretlerini görmek için
 
@@ -624,6 +654,7 @@
     $('modalOnay').addEventListener('click', function () { modalKapat(); gonder(); });
     $('modal').addEventListener('click', function (e) { if (e.target === this) modalKapat(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') modalKapat(); });
+    $('bildirimTamam').addEventListener('click', bildirimleriKapat);
     $('notAlani').addEventListener('input', function () {
       $('karakterSayac').textContent = this.value.length;
       degisiklikKontrol();
@@ -656,7 +687,11 @@
       $('iskelet').hidden = true;
       durum.gun = veri.gun;
       durum.toplam = veri.toplam;
+      durum.yuklendi = true;
       $('tarihMetni').textContent = veri.tarihMetni;
+      bildirimGoster(veri.bildirimler);
+      durum.imza = imzaOlustur(veri);
+      otomatikYenilemeBaslat();
 
       if (!veri.toplam) {
         $('bosDurum').hidden = false;
@@ -725,6 +760,10 @@
           var metin = el('span', 'gorev-metin');
           var ad = el('span', 'gorev-ad');
           ad.textContent = g.ad;
+          if (durum.yeniIdler[g.id]) {
+            var yeni = el('span', 'yeni-etiket'); yeni.textContent = 'YENİ'; ad.appendChild(yeni);
+            label.classList.add('yeni');
+          }
           metin.appendChild(ad);
           if (baskasi) {
             var alt = el('span', 'gorev-alt');
@@ -771,8 +810,13 @@
     function imzaOlustur(veri) {
       return JSON.stringify([
         veri.kategoriler.map(function (k) { return [k.ad, k.gorevler.map(function (g) { return g.id; })]; }),
-        Object.keys(veri.baskalari || {}).sort().map(function (id) { return [id, veri.baskalari[id].ad]; })
+        Object.keys(veri.baskalari || {}).sort().map(function (id) { return [id, veri.baskalari[id].ad]; }),
+        acikBildirimler(veri.bildirimler).map(function (b) { return b.id; })
       ]);
+    }
+
+    function acikBildirimler(liste) {
+      return (liste || []).filter(function (b) { return !durum.kapatilan[b.id]; });
     }
 
     /** Sunucuda kayıtlı durumun özeti (kaydedilmemiş değişiklik tespiti için). */
@@ -871,6 +915,7 @@
 
       if (sonuc.veri) {
         // Sunucunun güncel ortak durumuyla yeniden çiz (diğerlerinin yaptıkları dahil)
+        bildirimGoster(sonuc.veri.bildirimler);
         ciz(sonuc.veri.kategoriler, sonuc.veri.tamamlananlar, sonuc.veri.baskalari);
         durum.toplam = sonuc.veri.toplam;
         durum.imza = imzaOlustur(sonuc.veri);
@@ -906,7 +951,7 @@
     }
 
     function sessizYenile() {
-      if (document.hidden || durum.kaydediliyor || durum.yenileniyor || !$('modal').hidden || !durum.toplam) return;
+      if (document.hidden || durum.kaydediliyor || durum.yenileniyor || !$('modal').hidden || !durum.yuklendi) return;
       if (navigator.onLine === false) return;
       durum.yenileniyor = true;
       google.script.run
@@ -920,6 +965,10 @@
       if (veri.gun !== durum.gun) { yukle(); return; }
       var yeniImza = imzaOlustur(veri);
       if (yeniImza === durum.imza) return;
+      var yeniBildirim = acikBildirimler(veri.bildirimler).some(function (b) { return !durum.yeniIdler[b.id]; });
+      bildirimGoster(veri.bildirimler);
+      // Görev listesi boşken yeni görev atandıysa ekranı baştan kur
+      if (!durum.toplam && veri.toplam) { durum.imza = yeniImza; yuklendi(veri); if (yeniBildirim) zilCal(); return; }
 
       // Kaydedilmemiş değişiklik varsa kullanıcının işaretleri korunur; yoksa sunucudaki hal esas alınır
       var degisiklikVar = halOzeti() !== durum.kayitliHal;
@@ -937,7 +986,46 @@
       if (kaptirilan.length) {
         var b = veri.baskalari[kaptirilan[0]];
         toastGoster(b.ad + ' işaretlediğiniz bir görevi az önce tamamladı; liste güncellendi.', 'bilgi');
+      } else if (yeniBildirim) {
+        zilCal();
       }
+    }
+
+    /* ─────────── Yeni görev bildirimi ─────────── */
+
+    /** Okunmamış bildirimleri üstteki kutuda gösterir ve ilgili görevleri "YENİ" olarak işaretler. */
+    function bildirimGoster(liste) {
+      liste = acikBildirimler(liste);
+      durum.yeniIdler = {};
+      liste.forEach(function (b) { durum.yeniIdler[b.id] = true; });
+      var kutu = $('bildirimKutu');
+      if (!liste.length) { kutu.hidden = true; return; }
+      $('bildirimBaslik').textContent = liste.length === 1 ? 'Size yeni bir görev atandı' : 'Size ' + liste.length + ' yeni görev atandı';
+      var ul = $('bildirimListe'); ul.innerHTML = '';
+      liste.slice(0, 6).forEach(function (b) {
+        var li = el('li'); li.textContent = b.ad + ' (' + b.kategori + ')'; ul.appendChild(li);
+      });
+      if (liste.length > 6) { var d = el('li'); d.textContent = '… ve ' + (liste.length - 6) + ' görev daha'; ul.appendChild(d); }
+      kutu.hidden = false;
+    }
+
+    function zilCal() {
+      toastGoster('🔔 Size yeni görev atandı!', 'bilgi');
+      try { if (navigator.vibrate) navigator.vibrate([120, 80, 120]); } catch (e) { /* desteklenmiyor */ }
+      $('bildirimKutu').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    /** "Tamam, gördüm": kutuyu kapatır, YENİ etiketlerini kaldırır, sunucuda okundu yapar. */
+    function bildirimleriKapat() {
+      $('bildirimKutu').hidden = true;
+      Object.keys(durum.yeniIdler).forEach(function (id) { durum.kapatilan[id] = true; });
+      durum.yeniIdler = {};
+      Array.prototype.forEach.call(document.querySelectorAll('#gorevListesi .yeni-etiket'), function (e) { e.remove(); });
+      Array.prototype.forEach.call(document.querySelectorAll('#gorevListesi .gorev.yeni'), function (e) { e.classList.remove('yeni'); });
+      try { var im = JSON.parse(durum.imza); im[2] = []; durum.imza = JSON.stringify(im); } catch (e) { /* yok say */ }
+      google.script.run
+        .withFailureHandler(function () { /* bir sonraki açılışta tekrar gösterilir; sessiz */ })
+        .bildirimleriOkundu(BASLANGIC.kod);
     }
 
     function kayitHatasi(hata) {

@@ -183,6 +183,22 @@
     .kat-ata-btn svg { width: 16px; height: 16px; }
     .form-bilgi { background: var(--ana-acik); color: var(--ana); border-radius: 12px; padding: 10px 12px; font-size: 14px; margin-bottom: 14px; }
 
+    /* Atama bildirimi (WhatsApp) */
+    .bildirim-ok { display: flex; gap: 10px; align-items: center; background: var(--basari-acik); color: var(--basari-koyu); border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+    .bildirim-ok svg { width: 20px; height: 20px; flex: none; }
+    .wa-satir { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+    .wa-satir + .wa-satir { border-top: 1px solid var(--cizgi); }
+    .wa-kisi { flex: 1; min-width: 0; }
+    .wa-kisi b { display: block; }
+    .wa-kisi small { color: var(--yazi-soluk); }
+    .wa-btn {
+      flex: none; min-height: 48px; padding: 0 14px; border-radius: 12px; border: 0; background: #25D366; color: #fff;
+      font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; cursor: pointer;
+    }
+    .wa-btn svg { width: 20px; height: 20px; }
+    .wa-btn.gonderildi { background: var(--bg); color: var(--basari-koyu); border: 1.5px solid var(--cizgi); }
+    .wa-not { font-size: 12px; color: var(--yazi-soluk); margin-top: 4px; }
+
     /* Performans */
     .perf-ust { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
     .perf-ust small { color: var(--yazi-soluk); font-weight: 600; }
@@ -435,6 +451,22 @@
         <button type="submit" class="btn-kaydet" id="kaydetBtn"><span class="spinner"></span><span id="kaydetYazi">Kaydet</span></button>
       </div>
     </form>
+  </div>
+
+  <!-- Atama sonrası bildirim penceresi -->
+  <div id="bildirimPerde" class="perde" hidden role="dialog" aria-modal="true" aria-labelledby="bildirimBaslik">
+    <div class="pencere">
+      <h3 id="bildirimBaslik">Görev atandı</h3>
+      <div class="bildirim-ok">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        <span>Uygulama içi bildirim gönderildi. Kişi uygulamayı açtığında görecek.</span>
+      </div>
+      <p style="margin:0 0 6px;font-weight:650">İsterseniz WhatsApp'tan da haber verin:</p>
+      <div id="waListe"></div>
+      <div class="pencere-butonlar" style="grid-template-columns:1fr">
+        <button type="button" class="btn-iptal" id="bildirimKapat">Kapat</button>
+      </div>
+    </div>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -973,7 +1005,8 @@
         mesgulAyarla(false);
         pencereKapat();
         gorevVerisiAl(v);
-        toast('"' + durum.atanacakKategori + '" kategorisindeki ' + v.guncellenen + ' görev atandı.');
+        if (v.bildirim && v.bildirim.length) bildirimPenceresiAc(v.bildirim);
+        else toast('"' + durum.atanacakKategori + '" kategorisindeki ' + v.guncellenen + ' görev atandı (yeni atanan kişi yok).');
       }).catch(function (h) {
         mesgulAyarla(false);
         formHata(hataMetni(h));
@@ -1058,7 +1091,8 @@
         mesgulAyarla(false);
         pencereKapat();
         gorevVerisiAl(v);
-        toast(g ? 'Görev güncellendi.' : 'Görev eklendi.');
+        if (v.bildirim && v.bildirim.length) bildirimPenceresiAc(v.bildirim);
+        else toast(g ? 'Görev güncellendi.' : 'Görev eklendi.');
       }).catch(function (h) {
         mesgulAyarla(false);
         var m = hataMetni(h);
@@ -1082,6 +1116,56 @@
         formHata(m);
         if (/değişmiş/.test(m)) cagir('yoneticiGorevleriGetir', YK).then(gorevVerisiAl);
       });
+    }
+
+    /* ─────────── Atama bildirimi: WhatsApp ───────────
+       Mesaj genel tutulur (görev ayrıntısı yazılmaz); kişinin kendi linki eklenir. */
+    $('bildirimKapat').addEventListener('click', function () { $('bildirimPerde').hidden = true; document.body.style.overflow = ''; });
+    $('bildirimPerde').addEventListener('click', function (e) { if (e.target === this) $('bildirimKapat').click(); });
+
+    var WA_IKON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.1 5.1 0 0 0 1.1 2.7 11.7 11.7 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>';
+
+    function waMesaji(k) {
+      var ilkAd = k.ad.split(/\s+/)[0];
+      return 'Merhaba ' + ilkAd + ', tarafınıza yeni görev atandı.' +
+        (k.link ? ' Görev listenizi buradan görebilirsiniz: ' + k.link : ' Görev Takip uygulamasından kontrol edebilirsiniz.');
+    }
+
+    function bildirimPenceresiAc(kisiler) {
+      $('bildirimBaslik').textContent = kisiler.length === 1
+        ? kisiler[0].ad + ' kişisine görev atandı'
+        : kisiler.length + ' kişiye yeni görev atandı';
+      var kok = $('waListe'); kok.innerHTML = '';
+      kisiler.forEach(function (k) {
+        var satir = el('div', 'wa-satir');
+        var bilgi = el('div', 'wa-kisi');
+        var b = el('b'); b.textContent = k.ad;
+        var sm = el('small'); sm.textContent = k.adet + ' yeni görev' + (k.telefon ? '' : ' · telefon kayıtlı değil');
+        bilgi.appendChild(b); bilgi.appendChild(sm);
+        // Telefon yoksa wa.me kişi seçtirerek açılır
+        var a = el('a', 'wa-btn');
+        a.href = 'https://wa.me/' + (k.telefon || '') + '?text=' + encodeURIComponent(waMesaji(k));
+        a.target = '_blank'; a.rel = 'noopener';
+        a.innerHTML = WA_IKON;
+        var t = el('span'); t.textContent = 'WhatsApp ile bildir'; a.appendChild(t);
+        a.addEventListener('click', function () {
+          setTimeout(function () { a.classList.add('gonderildi'); t.textContent = 'Açıldı ✓'; }, 300);
+        });
+        satir.appendChild(bilgi); satir.appendChild(a);
+        kok.appendChild(satir);
+      });
+      if (kisiler.some(function (k) { return !k.telefon; })) {
+        var n = el('p', 'wa-not');
+        n.textContent = 'Telefonu kayıtlı olmayan kişide WhatsApp açılınca kişiyi kendiniz seçersiniz. Numaraları Personel sayfasının "Telefon" sütununa ekleyebilirsiniz.';
+        kok.appendChild(n);
+      }
+      if (kisiler.some(function (k) { return !k.link; })) {
+        var n2 = el('p', 'wa-not');
+        n2.textContent = 'Mesaja kişisel link eklenemedi: e-tabloda bir kez "Görev Takip > Personel Linklerini Oluştur" çalıştırın.';
+        kok.appendChild(n2);
+      }
+      $('bildirimPerde').hidden = false;
+      document.body.style.overflow = 'hidden';
     }
 
     /* ═══════════════════ PERFORMANS ═══════════════════

@@ -36,26 +36,30 @@ const CONFIG = Object.freeze({
     PERSONEL: 'Personel',
     GOREVLER: 'Gorevler',
     KAYITLAR: 'Kayitlar',
-    OZET: 'Ozet'
+    OZET: 'Ozet',
+    BILDIRIMLER: 'Bildirimler'
   }),
 
   BASLIK: Object.freeze({
-    PERSONEL: ['Kod', 'Ad Soyad', 'Aktif', 'Kişisel Link'],
+    PERSONEL: ['Kod', 'Ad Soyad', 'Aktif', 'Kişisel Link', 'Telefon'],
     GOREVLER: ['Görev Adı', 'Kategori', 'Atanan Personel', 'Aktif', 'Sıra'],
     KAYITLAR: ['Zaman Damgası', 'Tarih', 'Personel Kodu', 'Personel Adı',
-               'Görev Adı', 'Kategori', 'Durum', 'Not', 'Tamamlayan']
+               'Görev Adı', 'Kategori', 'Durum', 'Not', 'Tamamlayan'],
+    BILDIRIMLER: ['Zaman', 'Personel Kodu', 'Personel Adı', 'Görev Adı', 'Kategori', 'Durum', 'Okunma Zamanı']
   }),
 
   // Sütun indeksleri (0 tabanlı; getValues() dizisindeki konum)
   SUTUN: Object.freeze({
-    PERSONEL: Object.freeze({ KOD: 0, AD: 1, AKTIF: 2, LINK: 3 }),
+    PERSONEL: Object.freeze({ KOD: 0, AD: 1, AKTIF: 2, LINK: 3, TELEFON: 4 }),
     GOREVLER: Object.freeze({ AD: 0, KATEGORI: 1, ATANAN: 2, AKTIF: 3, SIRA: 4 }),
     KAYITLAR: Object.freeze({ ZAMAN: 0, TARIH: 1, KOD: 2, AD: 3, GOREV: 4,
-                              KATEGORI: 5, DURUM: 6, NOT: 7, TAMAMLAYAN: 8 })
+                              KATEGORI: 5, DURUM: 6, NOT: 7, TAMAMLAYAN: 8 }),
+    BILDIRIMLER: Object.freeze({ ZAMAN: 0, KOD: 1, AD: 2, GOREV: 3, KATEGORI: 4, DURUM: 5, OKUNMA: 6 })
   }),
 
   // Görevler ORTAKTIR: biri yapınca aynı görev diğer atananlarda "Başkası Yaptı" olur.
   DURUM: Object.freeze({ TAMAM: 'Tamamlandı', YAPILMADI: 'Yapılmadı', BASKASI: 'Başkası Yaptı' }),
+  BILDIRIM: Object.freeze({ OKUNMADI: 'Okunmadı', OKUNDU: 'Okundu', SAKLAMA_GUN: 30 }),
 
   // Yalnızca ÖNERİ: Gorevler sayfasındaki açılır listede ve yeni görev eklerken çıkar.
   // Ekranlardaki sıra bu listeye değil, Gorevler sayfasındaki satır sırasına göredir (gorevSirala_).
@@ -184,7 +188,8 @@ function gunlukVeri_(personel, veriler) {
     tamamlananlar: tamamlananlar,
     baskalari: baskalari,
     not: benim.not,
-    sonKayit: benim.sonZaman ? saatMetni_(benim.sonZaman) : null
+    sonKayit: benim.sonZaman ? saatMetni_(benim.sonZaman) : null,
+    bildirimler: okunmamisBildirimler_(personel.kod, gorevler)
   };
 }
 
@@ -316,6 +321,47 @@ function gorevleriKaydet(kod, tamamlananIdler, not, istemciGunu) {
     };
   } catch (hata) {
     throw istemciHatasi_(hata, 'Kayıt sırasında bir sorun oluştu. Lütfen tekrar deneyin.');
+  }
+}
+
+
+/**
+ * [İSTEMCİYE AÇIK] Personelin okunmamış "yeni görev" bildirimlerini okundu yapar.
+ * Yalnızca kodu doğrulanan kişinin KENDİ bildirimlerine dokunur.
+ */
+function bildirimleriOkundu(kod) {
+  try {
+    const personel = personelDogrula_(kod);
+    if (!personel) throw kullaniciHatasi_('Oturumunuz geçersiz. Lütfen kişisel linkinizle yeniden açın.');
+    const kilit = LockService.getScriptLock();
+    if (!kilit.tryLock(CONFIG.KILIT_BEKLEME_MS)) throw kullaniciHatasi_('Sistem şu anda yoğun. Lütfen tekrar deneyin.');
+    try {
+      const sayfa = sayfaGetir_(CONFIG.SAYFA.BILDIRIMLER, CONFIG.BASLIK.BILDIRIMLER);
+      const son = sayfa.getLastRow();
+      if (son < 2) return { basarili: true };
+      const S = CONFIG.SUTUN.BILDIRIMLER;
+      const aralik = sayfa.getRange(2, S.DURUM + 1, son - 1, 2);           // Durum + Okunma Zamanı
+      const durumlar = aralik.getValues();
+      const kodlar = sayfa.getRange(2, S.KOD + 1, son - 1, 1).getValues();
+      const simdi = new Date();
+      let degisti = false;
+      for (let i = 0; i < durumlar.length; i++) {
+        if (kodNormalize_(kodlar[i][0]) === personel.kod && durumlar[i][0] === CONFIG.BILDIRIM.OKUNMADI) {
+          durumlar[i] = [CONFIG.BILDIRIM.OKUNDU, simdi];
+          degisti = true;
+        }
+      }
+      if (degisti) {
+        aralik.setValues(durumlar);
+        sayfa.getRange(2, S.OKUNMA + 1, son - 1, 1).setNumberFormat(CONFIG.BICIM.ZAMAN);
+        SpreadsheetApp.flush();
+      }
+    } finally {
+      kilit.releaseLock();
+    }
+    return { basarili: true };
+  } catch (hata) {
+    throw istemciHatasi_(hata, 'Bildirim güncellenemedi.');
   }
 }
 
@@ -531,7 +577,11 @@ function saatMetni_(zaman) {
 
 /** Eski kurulumlarda Kayitlar başlık satırına yeni eklenen sütun başlıklarını yazar. */
 function kayitBasliginiTamamla_(sayfa) {
-  const b = CONFIG.BASLIK.KAYITLAR;
+  basligiTamamla_(sayfa, CONFIG.BASLIK.KAYITLAR);
+}
+
+/** Başlık satırında eksik kalan (sonradan eklenmiş) sütun başlıklarını yazar. */
+function basligiTamamla_(sayfa, b) {
   const mevcut = sayfa.getRange(1, 1, 1, b.length).getValues()[0];
   for (let i = 0; i < b.length; i++) {
     if (mevcut[i] === '') {
@@ -731,7 +781,9 @@ function kurulum() {
     rapor.push('Örnek personel eklendi: ' + ornek.map(function (r) { return r[1] + ' (' + r[0] + ')'; }).join(', '));
   }
   listeDogrulamasi_(personel.getRange('C2:C'), ['Evet', 'Hayır'], false);
-  personel.setColumnWidth(1, 90).setColumnWidth(2, 180).setColumnWidth(3, 70).setColumnWidth(4, 420);
+  basligiTamamla_(personel, CONFIG.BASLIK.PERSONEL);
+  personel.getRange('E:E').setNumberFormat(CONFIG.BICIM.METIN); // 0532… başındaki 0 kaybolmasın
+  personel.setColumnWidth(1, 90).setColumnWidth(2, 180).setColumnWidth(3, 70).setColumnWidth(4, 420).setColumnWidth(5, 130);
 
   // ── Gorevler ──
   const gorevler = kurulumSayfasi_(ss, CONFIG.SAYFA.GOREVLER, CONFIG.BASLIK.GOREVLER, rapor);
@@ -760,6 +812,14 @@ function kurulum() {
   kayitlar.getRange('B2:B').setNumberFormat(CONFIG.BICIM.TARIH);
   kayitlar.getRange('C2:C').setNumberFormat(CONFIG.BICIM.METIN);
   kayitBasliginiTamamla_(kayitlar);
+
+  // ── Bildirimler ──
+  const bildirim = kurulumSayfasi_(ss, CONFIG.SAYFA.BILDIRIMLER, CONFIG.BASLIK.BILDIRIMLER, rapor);
+  bildirim.getRange('A2:A').setNumberFormat(CONFIG.BICIM.ZAMAN);
+  bildirim.getRange('G2:G').setNumberFormat(CONFIG.BICIM.ZAMAN);
+  bildirim.getRange('B2:B').setNumberFormat(CONFIG.BICIM.METIN);
+  bildirim.setColumnWidth(1, 140).setColumnWidth(2, 95).setColumnWidth(3, 150).setColumnWidth(4, 280)
+          .setColumnWidth(5, 100).setColumnWidth(6, 95).setColumnWidth(7, 140);
   listeDogrulamasi_(kayitlar.getRange('G2:G'), [CONFIG.DURUM.TAMAM, CONFIG.DURUM.YAPILMADI, CONFIG.DURUM.BASKASI], false);
   kayitlar.setColumnWidth(1, 140).setColumnWidth(2, 95).setColumnWidth(3, 95).setColumnWidth(4, 150)
           .setColumnWidth(5, 280).setColumnWidth(6, 90).setColumnWidth(7, 110).setColumnWidth(8, 280).setColumnWidth(9, 150);
@@ -1316,16 +1376,18 @@ function yoneticiGorevKaydet(yKod, g) {
 
     const atanan = atananMetni_(g.herkes, g.atananKodlar);
     const satirDegeri = [ad, kategori, atanan, g.aktif === false ? 'Hayır' : 'Evet', sira];
+    let bildirimKisileri = [];
 
     const kilit = LockService.getScriptLock();
     if (!kilit.tryLock(CONFIG.KILIT_BEKLEME_MS)) throw kullaniciHatasi_('Sistem şu anda yoğun. Lütfen tekrar deneyin.');
     try {
       const sayfa = sayfaGetir_(CONFIG.SAYFA.GOREVLER, CONFIG.BASLIK.GOREVLER);
       const son = sayfa.getLastRow();
-      const mevcut = son >= 2 ? sayfa.getRange(2, 1, son - 1, 2).getValues() : [];
+      const mevcut = son >= 2 ? sayfa.getRange(2, 1, son - 1, CONFIG.BASLIK.GOREVLER.length).getValues() : [];
       const satir = g.satir ? Number(g.satir) : null;
 
       if (satir) satirDogrula_(mevcut, satir, g.eskiAd);
+      const eskiSatir = satir ? mevcut[satir - 2] : null;
 
       // Aynı kategoride aynı adlı başka görev olmasın (kayıt kimliği "Kategori::Görev")
       const yeniId = gorevId_(metinNormalize_(kategori), metinNormalize_(ad));
@@ -1341,13 +1403,16 @@ function yoneticiGorevKaydet(yKod, g) {
         if (sayfa.getMaxRows() < hedef) sayfa.insertRowsAfter(sayfa.getMaxRows(), 1);
       }
       sayfa.getRange(hedef, 1, 1, satirDegeri.length).setValues([satirDegeri]);
+      bildirimKisileri = atamaBildirimleriOlustur_([{ eski: eskiSatir, yeni: satirDegeri }]);
       SpreadsheetApp.flush();
     } finally {
       kilit.releaseLock();
     }
 
     onbellekTemizle_();
-    return yoneticiGorevVerisi_();
+    const veri = yoneticiGorevVerisi_();
+    veri.bildirim = bildirimKisileri;
+    return veri;
   } catch (hata) {
     throw istemciHatasi_(hata, 'Görev kaydedilirken bir sorun oluştu.');
   }
@@ -1403,22 +1468,26 @@ function yoneticiKategoriAta(yKod, kategori, herkes, atananKodlar) {
     const kilit = LockService.getScriptLock();
     if (!kilit.tryLock(CONFIG.KILIT_BEKLEME_MS)) throw kullaniciHatasi_('Sistem şu anda yoğun. Lütfen tekrar deneyin.');
     let adet = 0;
+    let bildirimKisileri = [];
     try {
       const sayfa = sayfaGetir_(CONFIG.SAYFA.GOREVLER, CONFIG.BASLIK.GOREVLER);
       const son = sayfa.getLastRow();
       if (son < 2) throw kullaniciHatasi_('Görev listesi boş.');
       const S = CONFIG.SUTUN.GOREVLER;
-      const aralik = sayfa.getRange(2, 1, son - 1, S.ATANAN + 1);
-      const degerler = aralik.getValues();
+      const degerler = sayfa.getRange(2, 1, son - 1, CONFIG.BASLIK.GOREVLER.length).getValues();
+      const degisimler = [];
       degerler.forEach(function (r) {
         if (!String(r[S.AD] || '').trim()) return;
         if (metinNormalize_(String(r[S.KATEGORI] || '').trim() || CONFIG.VARSAYILAN_KATEGORI) !== katN) return;
+        const eski = r.slice();
         r[S.ATANAN] = atanan;
+        degisimler.push({ eski: eski, yeni: r });
         adet++;
       });
       if (!adet) throw kullaniciHatasi_('Bu kategoride görev bulunamadı. Liste yenilendi; tekrar deneyin.');
       // Yalnızca Atanan sütunu yazılır (kilit içinde okunan değerlerle → diğer satırlar korunur)
       sayfa.getRange(2, S.ATANAN + 1, degerler.length, 1).setValues(degerler.map(function (r) { return [r[S.ATANAN]]; }));
+      bildirimKisileri = atamaBildirimleriOlustur_(degisimler);
       SpreadsheetApp.flush();
     } finally {
       kilit.releaseLock();
@@ -1426,6 +1495,7 @@ function yoneticiKategoriAta(yKod, kategori, herkes, atananKodlar) {
     onbellekTemizle_();
     const veri = yoneticiGorevVerisi_();
     veri.guncellenen = adet;
+    veri.bildirim = bildirimKisileri;
     return veri;
   } catch (hata) {
     throw istemciHatasi_(hata, 'Kategori ataması kaydedilirken bir sorun oluştu.');
@@ -1557,12 +1627,12 @@ function personelListesi_() {
   const liste = [];
   const gorulen = {};
   if (son >= 2) {
-    sayfa.getRange(2, 1, son - 1, 3).getValues().forEach(function (r) {
+    sayfa.getRange(2, 1, son - 1, CONFIG.BASLIK.PERSONEL.length).getValues().forEach(function (r) {
       const kod = kodNormalize_(r[S.KOD]);
       const ad = String(r[S.AD] || '').trim();
       if (kod && ad && !gorulen[kod]) {
         gorulen[kod] = true;
-        liste.push({ kod: kod, ad: ad, aktif: evetMi_(r[S.AKTIF]) });
+        liste.push({ kod: kod, ad: ad, aktif: evetMi_(r[S.AKTIF]), telefon: telefonNormalize_(r[S.TELEFON]) });
       }
     });
   }
@@ -1632,4 +1702,129 @@ function menuYoneticiLinkleriniIptalEt() {
 /** Metni HTML içine güvenle yazmak için kaçış uygular. */
 function htmlKacis_(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+ *  BÖLÜM 4 — GÖREV ATAMA BİLDİRİMLERİ
+ *
+ *  • Uygulama içi: Yönetici panelinden bir görev birine YENİ atandığında
+ *    "Bildirimler" sayfasına satır eklenir; personel ekranı açılınca (ve
+ *    açıkken 30 sn'de bir) okunmamış bildirimleri gösterir.
+ *  • WhatsApp: Panel, görevi yeni alan kişileri ve telefonlarını döndürür;
+ *    yönetici "WhatsApp ile bildir" ile hazır genel mesajı gönderir.
+ *  • Not: Gorevler sayfası ELLE düzenlenirse bildirim üretilmez.
+ * ════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Bir görev satırına atanmış personelin kodları (Set).
+ * Pasif görev → kimse; Atanan boş → tüm aktif personel; aksi halde ad/kod eşleşenler.
+ */
+function atananKodKumesi_(satir, personel) {
+  const S = CONFIG.SUTUN.GOREVLER;
+  const kume = new Set();
+  if (!satir || !String(satir[S.AD] || '').trim() || !evetMi_(satir[S.AKTIF])) return kume;
+  const parcalar = String(satir[S.ATANAN] || '').split(/[,;\n]/).map(metinNormalize_).filter(String);
+  personel.forEach(function (p) {
+    if (!p.aktif) return;
+    if (!parcalar.length || parcalar.indexOf(metinNormalize_(p.ad)) !== -1 || parcalar.indexOf(p.kod) !== -1) kume.add(p.kod);
+  });
+  return kume;
+}
+
+/**
+ * Atama değişikliklerinden "yeni atanan" kişileri bulur, Bildirimler sayfasına
+ * yazar ve WhatsApp düğmeleri için kişi listesini döndürür. Kilit içinde çağrılır.
+ * @param {Array<{eski: Array|null, yeni: Array}>} degisimler Gorevler satırları (önce/sonra)
+ * @return {Array<{kod, ad, adet, telefon, link}>}
+ */
+function atamaBildirimleriOlustur_(degisimler) {
+  const personel = personelListesi_();
+  const kisiler = {};
+  const satirlar = [];
+  const simdi = new Date();
+  const S = CONFIG.SUTUN.GOREVLER;
+
+  degisimler.forEach(function (d) {
+    const once = atananKodKumesi_(d.eski, personel);
+    const sonra = atananKodKumesi_(d.yeni, personel);
+    // Görevin adı/kategorisi değiştiyse herkes için "yeni görev" sayılmaz; yalnızca kişi farkına bakılır
+    sonra.forEach(function (kod) {
+      if (once.has(kod)) return;
+      const p = personel.filter(function (x) { return x.kod === kod; })[0];
+      satirlar.push([simdi, kod, p.ad, String(d.yeni[S.AD]).replace(/^'/, ''),
+        String(d.yeni[S.KATEGORI] || '') || CONFIG.VARSAYILAN_KATEGORI, CONFIG.BILDIRIM.OKUNMADI, '']);
+      if (!kisiler[kod]) kisiler[kod] = { kod: kod, ad: p.ad, adet: 0, telefon: p.telefon };
+      kisiler[kod].adet++;
+    });
+  });
+
+  if (satirlar.length) {
+    const sayfa = sayfaGetir_(CONFIG.SAYFA.BILDIRIMLER, CONFIG.BASLIK.BILDIRIMLER);
+    eskiBildirimleriTemizle_(sayfa);
+    const bas = sayfa.getLastRow() + 1;
+    if (sayfa.getMaxRows() < bas + satirlar.length - 1) {
+      sayfa.insertRowsAfter(sayfa.getMaxRows(), bas + satirlar.length - 1 - sayfa.getMaxRows());
+    }
+    sayfa.getRange(bas, CONFIG.SUTUN.BILDIRIMLER.KOD + 1, satirlar.length, 1).setNumberFormat(CONFIG.BICIM.METIN);
+    sayfa.getRange(bas, 1, satirlar.length, satirlar[0].length).setValues(satirlar);
+    sayfa.getRange(bas, 1, satirlar.length, 1).setNumberFormat(CONFIG.BICIM.ZAMAN);
+  }
+
+  const url = PropertiesService.getScriptProperties().getProperty(CONFIG.WEBAPP_URL_OZELLIK) || '';
+  return Object.keys(kisiler).map(function (kod) {
+    const k = kisiler[kod];
+    k.link = url ? url + '?k=' + encodeURIComponent(kod) : '';
+    return k;
+  }).sort(function (a, b) { return a.ad.localeCompare(b.ad, 'tr'); });
+}
+
+/** Okunmuş ve saklama süresini (30 gün) aşmış bildirim satırlarını siler. */
+function eskiBildirimleriTemizle_(sayfa) {
+  const son = sayfa.getLastRow();
+  if (son < 2) return;
+  const S = CONFIG.SUTUN.BILDIRIMLER;
+  const sinir = new Date(Date.now() - CONFIG.BILDIRIM.SAKLAMA_GUN * 86400000);
+  const silinecek = [];
+  sayfa.getRange(2, 1, son - 1, CONFIG.BASLIK.BILDIRIMLER.length).getValues().forEach(function (r, i) {
+    if (r[S.DURUM] === CONFIG.BILDIRIM.OKUNDU && r[S.ZAMAN] instanceof Date && r[S.ZAMAN] < sinir) silinecek.push(i + 2);
+  });
+  satirlariSil_(sayfa, silinecek);
+}
+
+/**
+ * Personelin okunmamış bildirimleri. Yalnızca hâlâ ona atanmış görevler için
+ * gösterilir (sonradan kaldırılan/silinen görevler listelenmez).
+ * @return {Array<{id, ad, kategori}>}
+ */
+function okunmamisBildirimler_(kod, gorevler) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sayfa = ss.getSheetByName(CONFIG.SAYFA.BILDIRIMLER);
+  if (!sayfa || sayfa.getLastRow() < 2) return [];
+  const S = CONFIG.SUTUN.BILDIRIMLER;
+  const gecerli = {};
+  gorevler.forEach(function (g) { gecerli[g.id] = g; });
+  const gorulen = {};
+  const sonuc = [];
+  sayfa.getRange(2, 1, sayfa.getLastRow() - 1, CONFIG.BASLIK.BILDIRIMLER.length).getValues().forEach(function (r) {
+    if (kodNormalize_(r[S.KOD]) !== kod || r[S.DURUM] !== CONFIG.BILDIRIM.OKUNMADI) return;
+    const id = gorevId_(String(r[S.KATEGORI] || '').trim() || CONFIG.VARSAYILAN_KATEGORI, String(r[S.GOREV] || '').trim());
+    if (!gecerli[id] || gorulen[id]) return;
+    gorulen[id] = true;
+    sonuc.push({ id: id, ad: gecerli[id].ad, kategori: gecerli[id].kategori });
+  });
+  return sonuc;
+}
+
+/**
+ * Telefonu WhatsApp (wa.me) biçimine çevirir: yalnızca rakamlar, Türkiye kodu ile.
+ * "0532 123 45 67", "532 123 4567", "+90 532…" → "905321234567". Geçersizse ''.
+ */
+function telefonNormalize_(deger) {
+  let t = String(deger == null ? '' : deger).replace(/[^0-9]/g, '');
+  if (!t) return '';
+  if (t.indexOf('00') === 0) t = t.slice(2);
+  if (t.length === 11 && t.charAt(0) === '0') t = '90' + t.slice(1);
+  else if (t.length === 10 && t.charAt(0) === '5') t = '90' + t;
+  return (t.length >= 11 && t.length <= 15) ? t : '';
 }
