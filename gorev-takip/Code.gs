@@ -72,6 +72,9 @@ const CONFIG = Object.freeze({
   KILIT_BEKLEME_MS: 30000,     // LockService en fazla bu kadar bekler
   NOT_MAKS_UZUNLUK: 1000,
   WEBAPP_URL_OZELLIK: 'WEBAPP_URL',
+  YONETICI_OZELLIK: 'YONETICI_KODLARI', // Yönetici kodları Script Properties'te saklanır (tabloda değil)
+  YONETICI_KOD_UZUNLUGU: 24,
+  TREND_GUN: 7,                // Yönetici panelindeki eğilim grafiği kaç günü gösterir
 
   RENK: Object.freeze({ BASLIK_ARKA: '#4F46E5', BASLIK_YAZI: '#FFFFFF' })
 });
@@ -93,6 +96,9 @@ const GUNLER_ = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumar
  * Geçersiz kodda istemciye hiçbir personel/görev bilgisi gönderilmez.
  */
 function doGet(e) {
+  // ?y=... → yönetici paneli (ayrı sayfa, ayrı kod)
+  if (e && e.parameter && e.parameter.y) return yoneticiSayfasi_(String(e.parameter.y));
+
   const hamKod = (e && e.parameter && e.parameter.k) ? String(e.parameter.k) : '';
   const personel = personelDogrula_(hamKod);
 
@@ -709,7 +715,8 @@ function listeDogrulamasi_(aralik, degerler, gecersizeIzinVer) {
  * değerleri sayıya çevirmesini önlemek için) kullanılmaz; ilk karakter harftir.
  * 6 karakter ≈ 530 milyon olasılık.
  */
-function kodUret_(mevcutKodlar) {
+function kodUret_(mevcutKodlar, uzunluk) {
+  uzunluk = uzunluk || CONFIG.KOD_UZUNLUGU;
   const harfler = 'abcdfghjkmnpqrstuvwxyz';
   const tumu = harfler + '23456789';
   for (let deneme = 0; deneme < 100; deneme++) {
@@ -718,7 +725,7 @@ function kodUret_(mevcutKodlar) {
       Utilities.getUuid() + ':' + Math.random() + ':' + Date.now()
     );
     let kod = harfler.charAt((bayt[0] & 0xff) % harfler.length);
-    for (let i = 1; i < CONFIG.KOD_UZUNLUGU; i++) {
+    for (let i = 1; i < uzunluk; i++) {
       kod += tumu.charAt((bayt[i] & 0xff) % tumu.length);
     }
     if (!mevcutKodlar.has(kod)) {
@@ -742,6 +749,9 @@ function onOpen() {
       .createMenu('Görev Takip')
       .addItem('Personel Linklerini Oluştur', 'menuLinkleriOlustur')
       .addItem('Özeti Güncelle', 'menuOzetiGuncelle')
+      .addSeparator()
+      .addItem('Yönetici Linki Oluştur', 'menuYoneticiLinkiOlustur')
+      .addItem('Tüm Yönetici Linklerini İptal Et', 'menuYoneticiLinkleriniIptalEt')
       .addSeparator()
       .addItem('Web Uygulaması Adresini Değiştir', 'menuWebAdresiniDegistir')
       .addItem('Önbelleği Temizle', 'menuOnbellegiTemizle')
@@ -924,35 +934,7 @@ function ozetHesapla_() {
     sayfa.getRange('B2').setValue(Utilities.parseDate(gun, CONFIG.SAAT_DILIMI, 'yyyy-MM-dd'));
   }
 
-  // Kayıtları personel bazında topla
-  const S = CONFIG.SUTUN.KAYITLAR;
-  const kayitSayfasi = sayfaGetir_(CONFIG.SAYFA.KAYITLAR, CONFIG.BASLIK.KAYITLAR);
-  const son = kayitSayfasi.getLastRow();
-  const ozet = {};
-  if (son >= 2) {
-    kayitSayfasi.getRange(2, 1, son - 1, CONFIG.BASLIK.KAYITLAR.length).getValues().forEach(function (r) {
-      if (hucreGunAnahtari_(r[S.TARIH]) !== gun) return;
-      const kod = kodNormalize_(r[S.KOD]);
-      if (!ozet[kod]) ozet[kod] = { ad: String(r[S.AD] || ''), kod: kod, tamam: 0, toplam: 0, son: null, not: '' };
-      const o = ozet[kod];
-      o.toplam++;
-      if (metinNormalize_(r[S.DURUM]) === metinNormalize_(CONFIG.DURUM.TAMAM)) o.tamam++;
-      if (r[S.ZAMAN] instanceof Date && (!o.son || r[S.ZAMAN] > o.son)) o.son = r[S.ZAMAN];
-      const not = String(r[S.NOT] || '').trim();
-      if (not && !o.not) o.not = not;
-    });
-  }
-
-  // Kayıt göndermemiş aktif personeli de ekle
-  const harita = personelHaritasi_();
-  Object.keys(harita).forEach(function (kod) {
-    if (harita[kod].aktif && !ozet[kod]) {
-      ozet[kod] = { ad: harita[kod].ad, kod: kod, tamam: 0, toplam: 0, son: null, not: '', kayitYok: true };
-    }
-  });
-
-  const liste = Object.keys(ozet).map(function (k) { return ozet[k]; })
-    .sort(function (a, b) { return a.ad.localeCompare(b.ad, 'tr'); });
+  const liste = gunOzeti_(gun, kayitlariOku_());
 
   // Eski tabloyu temizle
   const basSatir = 5;
@@ -1004,6 +986,48 @@ function ozetHesapla_() {
     .setFontColor('#64748B').setFontSize(9);
 }
 
+/** Kayitlar sayfasının tüm veri satırlarını (başlık hariç) okur. */
+function kayitlariOku_() {
+  const sayfa = sayfaGetir_(CONFIG.SAYFA.KAYITLAR, CONFIG.BASLIK.KAYITLAR);
+  const son = sayfa.getLastRow();
+  return son >= 2 ? sayfa.getRange(2, 1, son - 1, CONFIG.BASLIK.KAYITLAR.length).getValues() : [];
+}
+
+/**
+ * Verilen gün için personel bazında özet üretir (Ozet sayfası ve yönetici
+ * paneli ortak kullanır). Kayıt göndermemiş aktif personel kayitYok:true
+ * olarak eklenir. Liste ada göre sıralıdır.
+ * Her öğe: { kod, ad, tamam, toplam, son(Date|null), not, gorevler:[{ad,kategori,tamam}], kayitYok }
+ */
+function gunOzeti_(gun, veriler) {
+  const S = CONFIG.SUTUN.KAYITLAR;
+  const tamamN = metinNormalize_(CONFIG.DURUM.TAMAM);
+  const ozet = {};
+  veriler.forEach(function (r) {
+    if (hucreGunAnahtari_(r[S.TARIH]) !== gun) return;
+    const kod = kodNormalize_(r[S.KOD]);
+    if (!ozet[kod]) ozet[kod] = { ad: String(r[S.AD] || ''), kod: kod, tamam: 0, toplam: 0, son: null, not: '', gorevler: [] };
+    const o = ozet[kod];
+    const tamam = metinNormalize_(r[S.DURUM]) === tamamN;
+    o.toplam++;
+    if (tamam) o.tamam++;
+    o.gorevler.push({ ad: String(r[S.GOREV] || ''), kategori: String(r[S.KATEGORI] || ''), tamam: tamam });
+    if (r[S.ZAMAN] instanceof Date && (!o.son || r[S.ZAMAN] > o.son)) o.son = r[S.ZAMAN];
+    const not = String(r[S.NOT] || '').trim();
+    if (not && !o.not) o.not = not;
+  });
+
+  const harita = personelHaritasi_();
+  Object.keys(harita).forEach(function (kod) {
+    if (harita[kod].aktif && !ozet[kod]) {
+      ozet[kod] = { ad: harita[kod].ad, kod: kod, tamam: 0, toplam: 0, son: null, not: '', gorevler: [], kayitYok: true };
+    }
+  });
+
+  return Object.keys(ozet).map(function (k) { return ozet[k]; })
+    .sort(function (a, b) { return a.ad.localeCompare(b.ad, 'tr'); });
+}
+
 /** Özet tablosunun başlık satırını biçimlendirir. */
 function basliklariBicimle_(aralik) {
   aralik.setFontWeight('bold').setBackground(CONFIG.RENK.BASLIK_ARKA).setFontColor(CONFIG.RENK.BASLIK_YAZI);
@@ -1040,4 +1064,337 @@ function bildir_(baslik, mesaj) {
   } catch (e) {
     console.log(baslik + ':\n' + mesaj);
   }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+ *  BÖLÜM 3 — YÖNETİCİ PANELİ (web: …/exec?y=YONETICI_KODU)
+ *
+ *  • Yönetici kodları tabloda DEĞİL, Script Properties'te saklanır;
+ *    e-tabloyu görebilen personel bile yönetici kodunu göremez.
+ *  • Kodlar 24 karakterdir (tahmin edilemez) ve menüden üretilir/iptal edilir.
+ *  • İstemciye açık her yönetici fonksiyonu kodu baştan doğrular.
+ * ════════════════════════════════════════════════════════════════════ */
+
+/** Yönetici paneli sayfasını üretir; kod geçersizse uyarı ekranı gösterilir. */
+function yoneticiSayfasi_(hamKod) {
+  const yonetici = yoneticiDogrula_(hamKod);
+  const simdi = new Date();
+  const baslangic = yonetici
+    ? { gecerli: true, yKod: yonetici.kod, ad: yonetici.ad, gun: gunAnahtari_(simdi), tarihMetni: tarihMetni_(simdi) }
+    : { gecerli: false };
+
+  const sablon = HtmlService.createTemplateFromFile('yonetici');
+  sablon.baslangicJson = guvenliJson_(baslangic);
+  return sablon.evaluate()
+    .setTitle('Yönetici Paneli')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
+    .addMetaTag('mobile-web-app-capable', 'yes')
+    .addMetaTag('apple-mobile-web-app-capable', 'yes')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
+}
+
+/** Kayıtlı yönetici kodlarını { kod: { ad, olusturma } } olarak döndürür. */
+function yoneticiKodlari_() {
+  try {
+    return JSON.parse(PropertiesService.getScriptProperties().getProperty(CONFIG.YONETICI_OZELLIK) || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+/** Yönetici kodunu doğrular; geçerliyse { kod, ad } döner. */
+function yoneticiDogrula_(hamKod) {
+  const kod = kodNormalize_(hamKod);
+  if (!/^[a-z0-9]{16,64}$/.test(kod)) return null;
+  const y = yoneticiKodlari_()[kod];
+  return y ? { kod: kod, ad: y.ad || 'Yönetici' } : null;
+}
+
+/** Yönetici fonksiyonlarının ortak girişi: kod geçersizse kullanıcı hatası fırlatır. */
+function yoneticiGerekli_(yKod) {
+  const y = yoneticiDogrula_(yKod);
+  if (!y) throw kullaniciHatasi_('Yönetici bağlantınız geçersiz veya iptal edilmiş.');
+  return y;
+}
+
+/**
+ * [İSTEMCİYE AÇIK — YÖNETİCİ] Seçilen günün personel bazlı özeti ve
+ * o güne kadarki son 7 günün genel tamamlanma eğilimi.
+ */
+function yoneticiOzetGetir(yKod, gun) {
+  try {
+    yoneticiGerekli_(yKod);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(gun || ''))) gun = gunAnahtari_();
+    const secilen = Utilities.parseDate(gun, CONFIG.SAAT_DILIMI, 'yyyy-MM-dd');
+    const veriler = kayitlariOku_();
+
+    const liste = gunOzeti_(gun, veriler).map(function (o) {
+      return {
+        kod: o.kod, ad: o.ad, tamam: o.tamam, toplam: o.toplam, not: o.not,
+        son: o.son ? Utilities.formatDate(o.son, CONFIG.SAAT_DILIMI, 'HH:mm') : null,
+        kayitYok: !!o.kayitYok, gorevler: o.gorevler
+      };
+    });
+
+    // Son N günün genel oranı (tek geçişte)
+    const gunler = [];
+    const sayac = {};
+    for (let i = CONFIG.TREND_GUN - 1; i >= 0; i--) {
+      // Öğle saatine göre kaydır: yaz saati geçişlerinde gün atlamasın
+      const g = gunAnahtari_(new Date(secilen.getTime() + 12 * 3600000 - i * 86400000));
+      gunler.push(g);
+      sayac[g] = { tamam: 0, toplam: 0 };
+    }
+    const S = CONFIG.SUTUN.KAYITLAR;
+    const tamamN = metinNormalize_(CONFIG.DURUM.TAMAM);
+    veriler.forEach(function (r) {
+      const g = hucreGunAnahtari_(r[S.TARIH]);
+      if (!sayac[g]) return;
+      sayac[g].toplam++;
+      if (metinNormalize_(r[S.DURUM]) === tamamN) sayac[g].tamam++;
+    });
+    const kisaGun = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+    const trend = gunler.map(function (g) {
+      const d = Utilities.parseDate(g, CONFIG.SAAT_DILIMI, 'yyyy-MM-dd');
+      const hg = Number(Utilities.formatDate(d, CONFIG.SAAT_DILIMI, 'u'));
+      return {
+        gun: g,
+        etiket: kisaGun[hg - 1],
+        gunNo: Number(Utilities.formatDate(d, CONFIG.SAAT_DILIMI, 'd')),
+        tamam: sayac[g].tamam,
+        toplam: sayac[g].toplam
+      };
+    });
+
+    return { gun: gun, bugun: gunAnahtari_(), tarihMetni: tarihMetni_(secilen), personeller: liste, trend: trend };
+  } catch (hata) {
+    throw istemciHatasi_(hata, 'Özet yüklenirken bir sorun oluştu.');
+  }
+}
+
+/**
+ * [İSTEMCİYE AÇIK — YÖNETİCİ] Tüm görevleri (pasifler dahil), personel
+ * listesini ve kategorileri döndürür. Önbellek kullanılmaz.
+ */
+function yoneticiGorevleriGetir(yKod) {
+  try {
+    yoneticiGerekli_(yKod);
+    return yoneticiGorevVerisi_();
+  } catch (hata) {
+    throw istemciHatasi_(hata, 'Görev listesi yüklenirken bir sorun oluştu.');
+  }
+}
+
+/**
+ * [İSTEMCİYE AÇIK — YÖNETİCİ] Görev ekler (satir boşsa) veya günceller.
+ * @param {Object} g { satir, eskiAd, ad, kategori, sira, aktif, herkes, atananKodlar[] }
+ *   satir + eskiAd birlikte gönderilir: biri tabloyu elle değiştirdiyse
+ *   yanlış satırın üzerine yazılmasını önler.
+ */
+function yoneticiGorevKaydet(yKod, g) {
+  try {
+    yoneticiGerekli_(yKod);
+    if (!g || typeof g !== 'object') throw kullaniciHatasi_('Geçersiz istek.');
+
+    const ad = hucreMetni_(g.ad, 200);
+    if (!ad) throw kullaniciHatasi_('Görev adı boş olamaz.');
+    const kategori = hucreMetni_(g.kategori, 50) || CONFIG.VARSAYILAN_KATEGORI;
+    const siraSayi = Number(g.sira);
+    const sira = (g.sira === '' || g.sira == null || isNaN(siraSayi)) ? '' : Math.round(siraSayi);
+
+    // Atananlar: yalnızca var olan personel kabul edilir; tabloya okunur olsun diye AD yazılır
+    const personel = personelListesi_();
+    let atanan = '';
+    if (!g.herkes) {
+      const istenen = new Set((Array.isArray(g.atananKodlar) ? g.atananKodlar : []).map(kodNormalize_));
+      const adlar = personel.filter(function (p) { return istenen.has(p.kod); }).map(function (p) { return p.ad; });
+      if (!adlar.length) throw kullaniciHatasi_('En az bir kişi seçin ya da "Herkes" seçeneğini işaretleyin.');
+      atanan = adlar.join(', ');
+    }
+    const satirDegeri = [ad, kategori, atanan, g.aktif === false ? 'Hayır' : 'Evet', sira];
+
+    const kilit = LockService.getScriptLock();
+    if (!kilit.tryLock(CONFIG.KILIT_BEKLEME_MS)) throw kullaniciHatasi_('Sistem şu anda yoğun. Lütfen tekrar deneyin.');
+    try {
+      const sayfa = sayfaGetir_(CONFIG.SAYFA.GOREVLER, CONFIG.BASLIK.GOREVLER);
+      const son = sayfa.getLastRow();
+      const mevcut = son >= 2 ? sayfa.getRange(2, 1, son - 1, 2).getValues() : [];
+      const satir = g.satir ? Number(g.satir) : null;
+
+      if (satir) satirDogrula_(mevcut, satir, g.eskiAd);
+
+      // Aynı kategoride aynı adlı başka görev olmasın (kayıt kimliği "Kategori::Görev")
+      const yeniId = gorevId_(metinNormalize_(kategori), metinNormalize_(ad));
+      mevcut.forEach(function (r, i) {
+        if (i + 2 === satir) return;
+        const id = gorevId_(metinNormalize_(String(r[1] || '').trim() || CONFIG.VARSAYILAN_KATEGORI), metinNormalize_(r[0]));
+        if (id === yeniId) throw kullaniciHatasi_('"' + kategori + '" kategorisinde bu adla bir görev zaten var.');
+      });
+
+      let hedef = satir;
+      if (!hedef) {
+        hedef = son + 1;
+        if (sayfa.getMaxRows() < hedef) sayfa.insertRowsAfter(sayfa.getMaxRows(), 1);
+      }
+      sayfa.getRange(hedef, 1, 1, satirDegeri.length).setValues([satirDegeri]);
+      SpreadsheetApp.flush();
+    } finally {
+      kilit.releaseLock();
+    }
+
+    onbellekTemizle_();
+    return yoneticiGorevVerisi_();
+  } catch (hata) {
+    throw istemciHatasi_(hata, 'Görev kaydedilirken bir sorun oluştu.');
+  }
+}
+
+/** [İSTEMCİYE AÇIK — YÖNETİCİ] Görevi Gorevler sayfasından siler. */
+function yoneticiGorevSil(yKod, satir, eskiAd) {
+  try {
+    yoneticiGerekli_(yKod);
+    const kilit = LockService.getScriptLock();
+    if (!kilit.tryLock(CONFIG.KILIT_BEKLEME_MS)) throw kullaniciHatasi_('Sistem şu anda yoğun. Lütfen tekrar deneyin.');
+    try {
+      const sayfa = sayfaGetir_(CONFIG.SAYFA.GOREVLER, CONFIG.BASLIK.GOREVLER);
+      const son = sayfa.getLastRow();
+      const mevcut = son >= 2 ? sayfa.getRange(2, 1, son - 1, 1).getValues() : [];
+      satirDogrula_(mevcut, Number(satir), eskiAd);
+      satirlariSil_(sayfa, [Number(satir)]);
+      SpreadsheetApp.flush();
+    } finally {
+      kilit.releaseLock();
+    }
+    onbellekTemizle_();
+    return yoneticiGorevVerisi_();
+  } catch (hata) {
+    throw istemciHatasi_(hata, 'Görev silinirken bir sorun oluştu.');
+  }
+}
+
+/** Panelin görev ekranı için tablodan taze veri hazırlar. */
+function yoneticiGorevVerisi_() {
+  const personel = personelListesi_();
+  const adIleKod = {};
+  personel.forEach(function (p) { adIleKod[metinNormalize_(p.ad)] = p.kod; adIleKod[p.kod] = p.kod; });
+
+  const sayfa = sayfaGetir_(CONFIG.SAYFA.GOREVLER, CONFIG.BASLIK.GOREVLER);
+  const S = CONFIG.SUTUN.GOREVLER;
+  const son = sayfa.getLastRow();
+  const gorevler = [];
+  if (son >= 2) {
+    sayfa.getRange(2, 1, son - 1, CONFIG.BASLIK.GOREVLER.length).getValues().forEach(function (r, i) {
+      const ad = String(r[S.AD] || '').trim();
+      if (!ad) return;
+      const ham = String(r[S.ATANAN] || '').split(/[,;\n]/).map(function (x) { return x.trim(); }).filter(String);
+      const kodlar = [], bilinmeyen = [];
+      ham.forEach(function (x) {
+        const k = adIleKod[metinNormalize_(x)] || adIleKod[kodNormalize_(x)];
+        if (k) { if (kodlar.indexOf(k) === -1) kodlar.push(k); } else bilinmeyen.push(x);
+      });
+      const siraSayi = Number(r[S.SIRA]);
+      gorevler.push({
+        satir: i + 2,
+        ad: ad,
+        kategori: String(r[S.KATEGORI] || '').trim() || CONFIG.VARSAYILAN_KATEGORI,
+        herkes: ham.length === 0,
+        atananKodlar: kodlar,
+        bilinmeyen: bilinmeyen,
+        aktif: evetMi_(r[S.AKTIF]),
+        sira: (r[S.SIRA] === '' || isNaN(siraSayi)) ? '' : siraSayi
+      });
+    });
+  }
+
+  // Kategori sırası: önce CONFIG.KATEGORI_SIRASI, sonra tablodaki ilk görünüş sırası
+  const kategoriler = CONFIG.KATEGORI_SIRASI.slice();
+  gorevler.forEach(function (g) { if (kategoriler.indexOf(g.kategori) === -1) kategoriler.push(g.kategori); });
+
+  return { gorevler: gorevler, personeller: personel, kategoriler: kategoriler };
+}
+
+/** Personel sayfasını önbelleksiz okur: [{ kod, ad, aktif }] (ada göre sıralı). */
+function personelListesi_() {
+  const sayfa = sayfaGetir_(CONFIG.SAYFA.PERSONEL, CONFIG.BASLIK.PERSONEL);
+  const S = CONFIG.SUTUN.PERSONEL;
+  const son = sayfa.getLastRow();
+  const liste = [];
+  const gorulen = {};
+  if (son >= 2) {
+    sayfa.getRange(2, 1, son - 1, 3).getValues().forEach(function (r) {
+      const kod = kodNormalize_(r[S.KOD]);
+      const ad = String(r[S.AD] || '').trim();
+      if (kod && ad && !gorulen[kod]) {
+        gorulen[kod] = true;
+        liste.push({ kod: kod, ad: ad, aktif: evetMi_(r[S.AKTIF]) });
+      }
+    });
+  }
+  return liste.sort(function (a, b) { return a.ad.localeCompare(b.ad, 'tr'); });
+}
+
+/** Düzenlenecek satırın hâlâ beklenen görevi içerdiğini doğrular. */
+function satirDogrula_(mevcut, satir, eskiAd) {
+  const i = satir - 2;
+  if (!(i >= 0 && i < mevcut.length) || String(mevcut[i][0] || '').trim() !== String(eskiAd || '').trim()) {
+    throw kullaniciHatasi_('Görev listesi siz düzenlerken değişmiş. Liste yenilendi; lütfen tekrar deneyin.');
+  }
+}
+
+/** Hücreye yazılacak metni temizler: uzunluk sınırı + formül enjeksiyonu koruması. */
+function hucreMetni_(deger, maks) {
+  let s = (typeof deger === 'string' ? deger : '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (s.length > maks) s = s.slice(0, maks);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  return s;
+}
+
+/** [MENÜ] Yeni bir yönetici linki üretir ve kopyalanabilir pencerede gösterir. */
+function menuYoneticiLinkiOlustur() {
+  yoneticiKontrol_();
+  const ui = SpreadsheetApp.getUi();
+  const url = webAppAdresi_(ui, false);
+  if (!url) return;
+
+  const yanit = ui.prompt('Yönetici Linki Oluştur', 'Bu link kimin için? (ör. Okan Bey)', ui.ButtonSet.OK_CANCEL);
+  if (yanit.getSelectedButton() !== ui.Button.OK) return;
+  const ad = hucreMetni_(yanit.getResponseText(), 60).replace(/^'/, '') || 'Yönetici';
+
+  const kodlar = yoneticiKodlari_();
+  const kod = kodUret_(new Set(Object.keys(kodlar)), CONFIG.YONETICI_KOD_UZUNLUGU);
+  kodlar[kod] = { ad: ad, olusturma: Utilities.formatDate(new Date(), CONFIG.SAAT_DILIMI, 'dd.MM.yyyy HH:mm') };
+  PropertiesService.getScriptProperties().setProperty(CONFIG.YONETICI_OZELLIK, JSON.stringify(kodlar));
+
+  const link = url + '?y=' + kod;
+  const html = HtmlService.createHtmlOutput(
+    '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5">' +
+    '<p><b>' + htmlKacis_(ad) + '</b> için yönetici linki:</p>' +
+    '<input id="l" readonly value="' + htmlKacis_(link) + '" style="width:100%;padding:8px;font-size:13px" onclick="this.select()">' +
+    '<p style="margin-top:12px"><button onclick="var l=document.getElementById(\'l\');l.select();document.execCommand(\'copy\');this.textContent=\'Kopyalandı ✓\'" ' +
+    'style="padding:8px 16px;background:#4F46E5;color:#fff;border:0;border-radius:6px;cursor:pointer">Linki Kopyala</button></p>' +
+    '<p style="color:#b91c1c">Bu link personel ve görev verilerini yönetmeye izin verir. Kimseyle paylaşmayın. ' +
+    'Sızarsa menüden <i>Tüm Yönetici Linklerini İptal Et</i> deyip yenisini oluşturun.</p></div>'
+  ).setWidth(520).setHeight(260);
+  ui.showModalDialog(html, 'Yönetici Linki');
+}
+
+/** [MENÜ] Bütün yönetici linklerini geçersiz kılar. */
+function menuYoneticiLinkleriniIptalEt() {
+  yoneticiKontrol_();
+  const ui = SpreadsheetApp.getUi();
+  const kodlar = yoneticiKodlari_();
+  const adet = Object.keys(kodlar).length;
+  if (!adet) { ui.alert('Kayıtlı yönetici linki yok.'); return; }
+  const adlar = Object.keys(kodlar).map(function (k) { return '• ' + kodlar[k].ad + ' (' + kodlar[k].olusturma + ')'; }).join('\n');
+  const onay = ui.alert('Yönetici Linklerini İptal Et',
+    adet + ' yönetici linki iptal edilecek:\n' + adlar + '\n\nDevam edilsin mi?', ui.ButtonSet.YES_NO);
+  if (onay !== ui.Button.YES) return;
+  PropertiesService.getScriptProperties().deleteProperty(CONFIG.YONETICI_OZELLIK);
+  ui.alert('Tüm yönetici linkleri iptal edildi. Gerekirse yeni link oluşturun.');
+}
+
+/** Metni HTML içine güvenle yazmak için kaçış uygular. */
+function htmlKacis_(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

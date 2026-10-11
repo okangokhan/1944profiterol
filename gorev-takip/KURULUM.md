@@ -6,6 +6,7 @@ Personelin günlük açılış / gün içi / kapanış rutinlerini telefondan i�
 |---|---|
 | `Code.gs` | Sunucu kodu. **Bölüm 1:** web uygulaması (doGet, doğrulama, kayıt). **Bölüm 2:** yönetici özellikleri (menü, link üretici, Ozet sayfası) |
 | `index.html` | Tek dosya arayüz (HTML + CSS + JS, framework yok) |
+| `yonetici.html` | Yönetici paneli arayüzü (özet + görev yönetimi) |
 | `appsscript.json` | Proje bildirimi: saat dilimi `Europe/Istanbul`, V8, web uygulaması ayarları |
 
 ---
@@ -119,6 +120,25 @@ Ana ekrandaki simge doğrudan kişisel linki açar. Personelin linki her gün ye
 ### 9. "Bu uygulama başka bir kullanıcı tarafından oluşturuldu" bandı
 Sayfanın üstünde gri bir bant görünebilir: *"Bu uygulama, Google değil, başka bir kullanıcı tarafından oluşturuldu"*. Bu, Google'ın Apps Script web uygulamalarına eklediği **standart bir güvenlik uyarısıdır**. Kaldırılamaz ve bir hata değildir. Personele önceden söylemeniz yeterli. (Google Workspace hesaplarında, aynı alan içindeki kullanıcılara gösterilmeyebilir.)
 
+### 10. Yönetici paneli (`…/exec?y=…`)
+Telefondan açılan yönetici ekranında iki sekme vardır:
+
+- **Özet**
+  - Tarih seçilir (‹ › okları ya da tarihe dokunarak). Genel tamamlama oranı, kayıt gönderen ve "Kayıt yok" sayıları görünür.
+  - **Son 7 günün** tamamlanma grafiği vardır; bir güne dokunarak o güne geçilir.
+  - Personel kartına dokununca o günün görev listesi (✓/✗) ve notu açılır. Kayıt göndermeyenler listenin en üstünde yer alır.
+- **Görevler**
+  - Tüm görevler kategori ve Sıra'ya göre listelenir. Kişiye göre filtrelenebilir; pasif görevler isteğe bağlı gösterilir.
+  - **Yeni Görev** ile görev eklenir. Bir göreve dokunarak ad, kategori, sıra, aktiflik ve **kime atanacağı** ("Herkes" ya da seçili kişiler) değiştirilir veya görev silinir.
+  - Değişiklik Gorevler sayfasına yazılır ve personel ekranına **hemen** yansır.
+
+**Kurulum**
+1. Apps Script'te **＋ > HTML** ile **`yonetici`** adlı bir dosya oluşturun ve `yonetici.html` içeriğini yapıştırın. `Code.gs`'i de güncel haliyle değiştirin, sonra kaydedin.
+2. **Dağıt > Dağıtımları yönet > ✏ Düzenle > Sürüm: Yeni sürüm > Dağıt**. Personel linkleri değişmez.
+3. E-tabloyu yenileyin (F5) ve **Görev Takip > Yönetici Linki Oluştur**'u seçin. Kimin için olduğunu yazın. Açılan penceredeki linki **Linki Kopyala** ile alın ve telefonunuzda açın; isterseniz ana ekrana ekleyin.
+
+**Güvenlik:** Yönetici kodları 24 karakterdir ve e-tabloda değil, betiğin gizli ayarlarında (Script Properties) saklanır. E-tabloyu görebilen biri bile bu kodları göremez. Link sızarsa **Görev Takip > Tüm Yönetici Linklerini İptal Et** ile hepsini geçersiz kılıp yenisini oluşturun.
+
 ---
 
 ## Test Kontrol Listesi
@@ -175,7 +195,16 @@ Sayfanın üstünde gri bir bant görünebilir: *"Bu uygulama, Google değil, ba
 - [ ] **Yüklenirken kesinti.** Sayfa yüklenirken bağlantı koparsa "Görevler yüklenemedi" kutusu ve **Tekrar Dene** butonu çıkar. Butona basınca liste yüklenir.
 - [ ] **Yavaş bağlantı.** Sunucu 45 sn içinde yanıt vermezse "Sunucu yanıt vermedi" uyarısı çıkar. Tekrar denemek güvenlidir, mükerrer kayıt oluşmaz.
 
-### Yönetici
+### Yönetici paneli
+- [ ] **Görev Takip > Yönetici Linki Oluştur** ile üretilen link açılınca "Yönetici Paneli" ekranı gelir. `?y=` değeri değiştirilince "Geçersiz yönetici bağlantısı" ekranı çıkar.
+- [ ] Bir personelin `?k=` kodu, `?y=` olarak denenince panel **açılmaz**.
+- [ ] Özet sekmesinde tarih değiştirilince rakamlar ve grafik güncellenir. Kayıt göndermeyen kişi "Kayıt yok" olarak üstte görünür.
+- [ ] Yeni görev sadece bir kişiye atanınca yalnızca o kişinin ekranında görünür, diğerinde görünmez. Gorevler sayfasının C sütununa kişinin adı yazılır.
+- [ ] Aynı kategoride aynı adla ikinci görev eklenmek istenince uyarı çıkar.
+- [ ] Görevi "Aktif" kapalı kaydedince personel ekranından kalkar. Sil'e basınca Gorevler sayfasından silinir, geçmiş Kayitlar silinmez.
+- [ ] **Tüm Yönetici Linklerini İptal Et** sonrası eski yönetici linki çalışmaz.
+
+### Yönetici (e-tablo)
 - [ ] **Görev Takip > Personel Linklerini Oluştur.** Kodu boş olana kod üretilir ve D sütununa `/exec?k=…` linki yazılır.
 - [ ] **Ozet!B2**'ye bugünün tarihini yazın. Tablo personel bazında Tamamlanan / Toplam / Yüzde ile dolar. Yüzde sütunu kırmızı → yeşil renklenir.
 - [ ] Gorevler sayfasında bir görev ekleyince değişiklik, uygulama yenilendiğinde hemen görünür. Yeni sürüm dağıtmak gerekmez.
@@ -192,4 +221,5 @@ Sayfanın üstünde gri bir bant görünebilir: *"Bu uygulama, Google değil, ba
 | Görev Takip menüsü görünmüyor | E-tablo sekmesini yenileyin. Yine yoksa `kurulum`'u düzenleyiciden bir kez çalıştırıp izin verin. |
 | Tarih bir gün kaymış görünüyor | **Dosya > Ayarlar > Saat dilimi** değeri *(GMT+03:00) İstanbul* olmalıdır. `kurulum()` bunu otomatik ayarlar. |
 | Personel eklendi ama linki "geçersiz" diyor | Aktif = `Evet` mi? Kod hücresinde boşluk veya yanlış karakter var mı? **Görev Takip > Önbelleği Temizle**'yi deneyin. |
+| **"Google Drive: Dosya şu anda açılamıyor. Lütfen adresi kontrol edin"** | 1) Linki **gizli sekmede** (Chrome: ⋮ > Yeni gizli sekme) açın. Açılıyorsa sorun, tarayıcıda **birden fazla Google hesabıyla** oturum açık olmasıdır (bilinen bir Google hatası). Adreste `/u/1/` görünürse bu yüzdendir. Personel genellikle tek hesaplı olduğu için onlarda sorun olmaz. 2) **Dağıt > Dağıtımları yönet**'te **Erişimi olanlar: Herkes** olmalıdır. "Yalnızca ben" seçiliyse bu hata çıkar. 3) Link `…/exec?k=…` biçiminde olmalıdır. WhatsApp'ta link bölünmüşse veya sonu eksik kopyalanmışsa da bu hata çıkar. |
 | Linkler `/dev` ile bitiyor ve personelde çalışmıyor | **Görev Takip > Web Uygulaması Adresini Değiştir** ile `/exec` adresini girip linkleri yeniden oluşturun. |
