@@ -2,7 +2,7 @@
 
 Kotlin + Jetpack Compose (Material 3) + Room + Jetpack Glance ile yazılmış, offline-first görev/not uygulaması.
 
-**Hazır APK:** [`../apk/Ajanda-v1.1.0.apk`](../apk/Ajanda-v1.1.0.apk) (minSdk 26 / Android 8.0+, targetSdk 35)
+**Hazır APK:** [`../apk/Ajanda-v1.1.1.apk`](../apk/Ajanda-v1.1.1.apk) (minSdk 26 / Android 8.0+, targetSdk 35)
 
 | Bugün | Hafta (eriyen çubuklar) | Ay | Koyu tema |
 |---|---|---|---|
@@ -59,5 +59,8 @@ app/src/main/java/com/okan/ajanda/
 ./gradlew :app:testDebugUnitTest   # birim testleri + ekran görüntüleri (app/build/shots)
 ./gradlew :app:assembleRelease     # app/build/outputs/apk/release/app-release.apk
 ```
-Release derlemesi R8 ile küçültülür ve varsa `keystore/ajanda.keystore` ile imzalanır (anahtar repoya eklenmez; yoksa debug anahtarı kullanılır).
+Release derlemesi R8 ile küçültülür. İmza anahtarı repoda **yoktur**: `keystore/` klasörüne
+`keystore.properties`, `ajanda-release.jks`, `eski-ajanda.keystore`, `ajanda.lineage` dosyalarını koyup
+`./imzala.sh` çalıştırın; APK eski → yeni anahtar döndürmesiyle imzalanır (`../apk/` içine).
+Dosyalar yoksa derleme debug anahtarıyla imzalanır.
 Play Store'a göndermeden önce `app/build.gradle.kts` içine kendi `signingConfig`'inizi ekleyin.

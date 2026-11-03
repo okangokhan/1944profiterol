@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -13,20 +15,22 @@ android {
         applicationId = "com.okan.ajanda"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.1.1"
     }
 
-    // İmza anahtarı repoya konmaz. keystore/ajanda.keystore varsa onunla, yoksa varsayılan debug anahtarıyla imzalanır.
-    // Parolalar ortam değişkeninden okunur: AJANDA_STORE_PASSWORD / AJANDA_KEY_ALIAS / AJANDA_KEY_PASSWORD
-    val ajandaKeystore = rootProject.file("keystore/ajanda.keystore")
+    // İmza anahtarı repoya konmaz: keystore/keystore.properties + keystore/ajanda-release.jks (git'e girmez).
+    // Dosya yoksa debug anahtarıyla imzalanır. Anahtar döndürme (eski → yeni) için: ./imzala.sh
+    val keyProps = Properties().apply {
+        rootProject.file("keystore/keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
     signingConfigs {
-        if (ajandaKeystore.exists()) {
+        if (keyProps.getProperty("storeFile") != null) {
             create("ajanda") {
-                storeFile = ajandaKeystore
-                storePassword = System.getenv("AJANDA_STORE_PASSWORD") ?: "android"
-                keyAlias = System.getenv("AJANDA_KEY_ALIAS") ?: "androiddebugkey"
-                keyPassword = System.getenv("AJANDA_KEY_PASSWORD") ?: "android"
+                storeFile = rootProject.file("keystore/" + keyProps.getProperty("storeFile"))
+                storePassword = keyProps.getProperty("storePassword")
+                keyAlias = keyProps.getProperty("keyAlias")
+                keyPassword = keyProps.getProperty("keyPassword")
             }
         }
     }
