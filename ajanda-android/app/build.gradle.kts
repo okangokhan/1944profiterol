@@ -15,8 +15,8 @@ android {
         applicationId = "com.okan.ajanda"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 4
+        versionName = "1.1.2"
     }
 
     // İmza anahtarı repoya konmaz: keystore/keystore.properties + keystore/ajanda-release.jks (git'e girmez).

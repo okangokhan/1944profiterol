@@ -117,7 +117,7 @@ fun AjandaRoot(settings: AppSettings, launchActions: MutableStateFlow<LaunchActi
             request = req,
             haptics = settings.haptics,
             onDismiss = { quickAdd = null },
-            onOpenEditor = { date -> quickAdd = null; newFor(date) },
+            onOpenEditor = { date, parsed -> quickAdd = null; edit = EditRequest(0, date, parsed) },
         )
     }
     edit?.let { req -> TaskEditSheet(request = req, onClose = { edit = null }) }

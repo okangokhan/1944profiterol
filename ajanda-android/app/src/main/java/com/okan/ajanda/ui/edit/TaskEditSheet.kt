@@ -53,7 +53,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalView
+import com.okan.ajanda.domain.ParsedCommand
+import com.okan.ajanda.ui.components.confirmHaptic
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,7 +89,12 @@ import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-data class EditRequest(val taskId: Long = 0, val date: LocalDate? = null, val nonce: Long = System.nanoTime())
+data class EditRequest(
+    val taskId: Long = 0,
+    val date: LocalDate? = null,
+    val prefill: ParsedCommand? = null,
+    val nonce: Long = System.nanoTime(),
+)
 
 private val dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy", TR)
 private val reminderOptions = listOf<Int?>(null, 0, 10, 30, 60, 1440)
@@ -91,7 +103,19 @@ private val reminderOptions = listOf<Int?>(null, 0, 10, 30, 60, 1440)
 @Composable
 fun TaskEditSheet(request: EditRequest, onClose: () -> Unit) {
     val vm: TaskEditViewModel = viewModel(key = "edit_${request.nonce}", factory = AppViewModelProvider.Factory)
-    LaunchedEffect(request) { vm.load(request.taskId, request.date) }
+    LaunchedEffect(request) { vm.load(request.taskId, request.date, request.prefill) }
+    val titleFocus = remember { FocusRequester() }
+    val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val view = LocalView.current
+    fun trySave() {
+        if (vm.save(onClose)) {
+            view.confirmHaptic()
+        } else {
+            scope.launch { scroll.animateScrollTo(0) }
+            runCatching { titleFocus.requestFocus() }
+        }
+    }
     val s = vm.state
     val tags by vm.tags.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
@@ -116,7 +140,7 @@ fun TaskEditSheet(request: EditRequest, onClose: () -> Unit) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .imePadding()
                 .padding(horizontal = 24.dp)
                 .navigationBarsPadding()
@@ -137,8 +161,19 @@ fun TaskEditSheet(request: EditRequest, onClose: () -> Unit) {
                     textStyle = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = cs.onSurface),
                     cursorBrush = SolidColor(cs.primary),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().focusRequester(titleFocus)
                 )
+            }
+            if (s.titleError) {
+                Text(
+                    "Kaydetmek için bir başlık yaz",
+                    color = cs.error, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+            }
+            // Yeni görevde başlık alanına odaklan
+            LaunchedEffect(s.loaded) {
+                if (s.loaded && s.isNew && s.title.isEmpty()) runCatching { titleFocus.requestFocus() }
             }
 
             // Etiketler (tek seçim)
@@ -313,6 +348,13 @@ fun TaskEditSheet(request: EditRequest, onClose: () -> Unit) {
                 Text("Öncelikli", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = 12.dp))
             }
 
+            if (s.titleError) {
+                Text(
+                    "Başlık boş — yukarıdaki “Görev başlığı” alanını doldur",
+                    color = cs.error, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
             Row(Modifier.fillMaxWidth().padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (!s.isNew) {
                     TextButton(onClick = { confirmDelete = true }) {
@@ -321,7 +363,7 @@ fun TaskEditSheet(request: EditRequest, onClose: () -> Unit) {
                 }
                 Spacer(Modifier.weight(1f))
                 Button(
-                    onClick = { vm.save(onClose) },
+                    onClick = { trySave() },
                     shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = cs.primary),
                     modifier = Modifier.height(60.dp)

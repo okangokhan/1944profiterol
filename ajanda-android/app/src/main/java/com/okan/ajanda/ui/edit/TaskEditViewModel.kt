@@ -11,6 +11,7 @@ import com.okan.ajanda.data.local.SubtaskEntity
 import com.okan.ajanda.data.local.TagEntity
 import com.okan.ajanda.data.local.TaskEntity
 import com.okan.ajanda.data.repository.TaskRepository
+import com.okan.ajanda.domain.ParsedCommand
 import com.okan.ajanda.domain.RecurrenceCalculator
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -55,8 +56,8 @@ class TaskEditViewModel(private val repo: TaskRepository) : ViewModel() {
     val tags: StateFlow<List<TagEntity>> =
         repo.observeTags().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Düzenleme sayfası açıldığında bir kez çağrılır. */
-    fun load(taskId: Long, date: LocalDate?) {
+    /** Düzenleme sayfası açıldığında bir kez çağrılır. [prefill]: hızlı eklemede yazılmış metin. */
+    fun load(taskId: Long, date: LocalDate?, prefill: ParsedCommand? = null) {
         if (requested) return
         requested = true
         viewModelScope.launch {
@@ -73,6 +74,19 @@ class TaskEditViewModel(private val repo: TaskRepository) : ViewModel() {
                         isCompleted = t.isCompleted, completedAt = t.completedAt, createdAt = t.createdAt,
                     )
                 } ?: EditState(loaded = true)
+            } else if (prefill != null) {
+                val d = prefill.date ?: date
+                EditState(
+                    loaded = true,
+                    title = prefill.title.takeUnless { it == "Yeni görev" }.orEmpty(),
+                    dueDate = d,
+                    dueTime = prefill.time,
+                    reminder = if (prefill.reminder && d != null) 0 else null,
+                    priority = prefill.priority,
+                    recurrence = prefill.recurrence,
+                    recurrenceDays = if (prefill.recurrence == Recurrence.WEEKLY && d != null) RecurrenceCalculator.bit(d.dayOfWeek) else 0,
+                    tagIds = repo.resolveTagIds(prefill.tags).take(1).toSet(),
+                )
             } else {
                 EditState(loaded = true, dueDate = date)
             }
@@ -122,10 +136,15 @@ class TaskEditViewModel(private val repo: TaskRepository) : ViewModel() {
         if (id > 0) update { copy(tagIds = setOf(id)) }
     }
 
-    fun save(onSaved: () -> Unit) {
+    private var saving = false
+
+    /** Başlık boşsa false döner (sayfa uyarı gösterir). Kayıt arka planda tamamlanır, sayfa hemen kapanır. */
+    fun save(onSaved: () -> Unit): Boolean {
         val s = state
-        if (s.title.isBlank()) { update { copy(titleError = true) }; return }
-        viewModelScope.launch {
+        if (s.title.isBlank()) { update { copy(titleError = true) }; return false }
+        if (saving) return true // çift dokunuşta ikinci kayıt oluşmasın
+        saving = true
+        run {
             var task = TaskEntity(
                 id = s.id, title = s.title.trim(), notes = s.notes.trim(), priority = s.priority,
                 dueDate = s.dueDate,
@@ -136,13 +155,14 @@ class TaskEditViewModel(private val repo: TaskRepository) : ViewModel() {
             )
             // Haftalık gün seçimine uymayan başlangıç tarihini ilk uygun güne kaydır
             task.dueDate?.let { task = task.copy(dueDate = RecurrenceCalculator.firstOnOrAfter(it, task)) }
-            repo.saveTask(
+            repo.saveTaskInBackground(
                 task,
                 s.subtasks.filter { it.title.isNotBlank() }.map { SubtaskEntity(title = it.title.trim(), isDone = it.done) },
                 s.tagIds
             )
             onSaved()
         }
+        return true
     }
 
     fun delete(onDone: () -> Unit) {

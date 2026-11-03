@@ -2,7 +2,7 @@
 
 Kotlin + Jetpack Compose (Material 3) + Room + Jetpack Glance ile yazılmış, offline-first görev/not uygulaması.
 
-**Hazır APK:** [`../apk/Ajanda-v1.1.1.apk`](../apk/Ajanda-v1.1.1.apk) (minSdk 26 / Android 8.0+, targetSdk 35)
+**Hazır APK:** [`../apk/Ajanda-v1.1.2.apk`](../apk/Ajanda-v1.1.2.apk) (minSdk 26 / Android 8.0+, targetSdk 35)
 
 | Bugün | Hafta (eriyen çubuklar) | Ay | Koyu tema |
 |---|---|---|---|

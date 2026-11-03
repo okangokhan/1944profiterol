@@ -59,6 +59,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.okan.ajanda.data.local.Priority
 import com.okan.ajanda.data.local.Recurrence
 import com.okan.ajanda.domain.DateText
+import com.okan.ajanda.domain.ParsedCommand
 import com.okan.ajanda.domain.VoiceCommandParser
 import com.okan.ajanda.ui.AppViewModelProvider
 import com.okan.ajanda.ui.components.confirmHaptic
@@ -81,7 +82,7 @@ fun QuickAddSheet(
     request: QuickAddRequest,
     haptics: Boolean,
     onDismiss: () -> Unit,
-    onOpenEditor: (LocalDate?) -> Unit,
+    onOpenEditor: (LocalDate?, ParsedCommand?) -> Unit,
     vm: QuickAddViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val context = LocalContext.current
@@ -178,7 +179,7 @@ fun QuickAddSheet(
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { onOpenEditor(parsed.date ?: baseDate) }) { Text("Detaylı düzenle") }
+                TextButton(onClick = { onOpenEditor(parsed.date ?: baseDate, parsed.takeIf { text.isNotBlank() }) }) { Text("Detaylı düzenle") }
                 Spacer(Modifier.weight(1f))
                 Button(onClick = { submit() }, enabled = text.isNotBlank()) { Text("Ekle") }
             }

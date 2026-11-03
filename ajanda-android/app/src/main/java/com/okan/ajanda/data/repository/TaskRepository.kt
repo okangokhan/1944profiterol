@@ -13,7 +13,11 @@ import com.okan.ajanda.domain.RecurrenceCalculator
 import com.okan.ajanda.reminder.ReminderScheduler
 import com.okan.ajanda.ui.theme.TagPalette
 import com.okan.ajanda.widget.WidgetRefresher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.combine
 import java.time.Instant
 import java.time.LocalDate
@@ -31,6 +35,7 @@ class TaskRepository(
     private val context: Context,
     db: AppDatabase,
     private val scheduler: ReminderScheduler,
+    private val appScope: CoroutineScope,
 ) {
     private val taskDao = db.taskDao()
     private val tagDao = db.tagDao()
@@ -96,12 +101,25 @@ class TaskRepository(
         return id
     }
 
-    suspend fun addParsed(cmd: ParsedCommand, fallbackDate: LocalDate?): Long {
+    /**
+     * Kaydı uygulama kapsamında yapar: ekran (ör. düzenleme sayfası) hemen kapanabilir,
+     * yazma işlemi sayfa kapansa da tamamlanır.
+     */
+    fun saveTaskInBackground(task: TaskEntity, subtasks: List<SubtaskEntity>, tagIds: Collection<Long>) {
+        appScope.launch { saveTask(task, subtasks, tagIds) }
+    }
+
+    /** Etiket adlarını id'ye çevirir; olmayanları oluşturur. */
+    suspend fun resolveTagIds(names: List<String>): List<Long> {
         val existing = tagDao.getAll()
-        val tagIds = cmd.tags.map { name ->
+        return names.map { name ->
             existing.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id
                 ?: tagDao.insert(TagEntity(name = name, color = TagPalette.forName(name)))
         }.filter { it > 0 }
+    }
+
+    suspend fun addParsed(cmd: ParsedCommand, fallbackDate: LocalDate?): Long {
+        val tagIds = resolveTagIds(cmd.tags)
         val task = TaskEntity(
             title = cmd.title,
             priority = cmd.priority,
@@ -182,5 +200,18 @@ class TaskRepository(
         taskDao.getWithReminders().forEach { scheduler.schedule(it) }
     }
 
-    private suspend fun refreshWidgets() = WidgetRefresher.refreshAll(context)
+    /**
+     * Widget'ları arka planda günceller. Glance güncellemesi birkaç saniye sürebilir;
+     * arayüzün (ör. Kaydet) bunu beklememesi için çağıran coroutine'den bağımsız çalışır.
+     * Arka arkaya gelen istekler tek güncellemede birleştirilir.
+     */
+    private fun refreshWidgets() {
+        widgetJob?.cancel()
+        widgetJob = appScope.launch {
+            delay(300)
+            WidgetRefresher.refreshAll(context)
+        }
+    }
+
+    @Volatile private var widgetJob: Job? = null
 }

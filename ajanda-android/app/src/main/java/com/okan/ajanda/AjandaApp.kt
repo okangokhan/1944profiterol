@@ -2,6 +2,9 @@ package com.okan.ajanda
 
 import android.app.Application
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import com.okan.ajanda.data.local.AppDatabase
 import com.okan.ajanda.data.prefs.SettingsRepository
 import com.okan.ajanda.data.repository.TaskRepository
@@ -24,7 +27,9 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
     val database: AppDatabase by lazy { AppDatabase.build(appContext) }
     val reminderScheduler by lazy { ReminderScheduler(appContext) }
-    val taskRepository by lazy { TaskRepository(appContext, database, reminderScheduler) }
+    /** Uygulama ömrü boyunca yaşayan kapsam (widget yenileme gibi arka plan işleri). */
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val taskRepository by lazy { TaskRepository(appContext, database, reminderScheduler, appScope) }
     val settingsRepository by lazy { SettingsRepository(appContext) }
 }
 
