@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="quick_add"
+        android:enabled="true"
+        android:icon="@drawable/ic_tile_add"
+        android:shortcutShortLabel="@string/shortcut_add_short">
+        <intent
+            android:action="com.okan.ajanda.QUICK_ADD"
+            android:targetClass="com.okan.ajanda.MainActivity"
+            android:targetPackage="com.okan.ajanda" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="voice_add"
+        android:enabled="true"
+        android:icon="@drawable/ic_mic"
+        android:shortcutShortLabel="@string/shortcut_voice_short">
+        <intent
+            android:action="com.okan.ajanda.VOICE_ADD"
+            android:targetClass="com.okan.ajanda.MainActivity"
+            android:targetPackage="com.okan.ajanda" />
+    </shortcut>
+</shortcuts>

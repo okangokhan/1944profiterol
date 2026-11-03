@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Ajanda sayfası -->
+    <path android:fillColor="#F7F5F0"
+        android:pathData="M36,32h36a4,4 0,0 1,4 4v38a4,4 0,0 1,-4 4h-36a4,4 0,0 1,-4 -4v-38a4,4 0,0 1,4 -4z"/>
+    <!-- üst şerit -->
+    <path android:fillColor="#C8553D"
+        android:pathData="M36,32h36a4,4 0,0 1,4 4v6h-44v-6a4,4 0,0 1,4 -4z"/>
+    <!-- halkalar -->
+    <path android:fillColor="#2F2E2B" android:pathData="M42,27h3v10h-3z"/>
+    <path android:fillColor="#2F2E2B" android:pathData="M63,27h3v10h-3z"/>
+    <!-- tik -->
+    <path android:fillColor="#00000000" android:strokeColor="#2F2E2B"
+        android:strokeWidth="4.5" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M43,59l7,7l15,-15"/>
+</vector>
