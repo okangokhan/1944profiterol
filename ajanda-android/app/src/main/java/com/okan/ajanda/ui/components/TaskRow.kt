@@ -15,9 +15,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,12 +28,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,12 +58,10 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-
 import com.okan.ajanda.data.local.Priority
 import com.okan.ajanda.data.local.Recurrence
 import com.okan.ajanda.data.local.TaskWithDetails
 import com.okan.ajanda.domain.DateText
-import com.okan.ajanda.ui.theme.priorityColor
 import java.time.LocalDate
 
 fun View.confirmHaptic() {
@@ -84,7 +89,7 @@ fun StrikeThroughText(
         label = "strike"
     )
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    val lineColor = color.copy(alpha = 0.75f)
+    val lineColor = color.copy(alpha = 0.7f)
     Text(
         text = text,
         style = style,
@@ -103,21 +108,21 @@ fun StrikeThroughText(
                 val left = l.getLineLeft(i)
                 val w = minOf(widths[i], remaining)
                 val y = (l.getLineTop(i) + l.getLineBottom(i)) / 2f
-                drawLine(lineColor, Offset(left, y), Offset(left + w, y), strokeWidth = 1.6.dp.toPx(), cap = StrokeCap.Round)
+                drawLine(lineColor, Offset(left, y), Offset(left + w, y), strokeWidth = 1.8.dp.toPx(), cap = StrokeCap.Round)
                 remaining -= w
             }
         }
     )
 }
 
-/** Yuvarlak, yaylı animasyonlu onay kutusu. */
+/** Yuvarlak, yaylı animasyonlu onay halkası (etiket renginde). */
 @Composable
 fun RoundCheck(
     checked: Boolean,
     onToggle: () -> Unit,
     color: Color,
     modifier: Modifier = Modifier,
-    size: Int = 22,
+    size: Int = 26,
     haptics: Boolean = true,
     enabled: Boolean = true,
 ) {
@@ -130,7 +135,7 @@ fun RoundCheck(
     )
     Box(
         modifier = modifier
-            .size((size + 14).dp)
+            .size((size + 16).dp)
             .clip(CircleShape)
             .clickable(enabled = enabled) {
                 if (haptics) { if (!checked) view.confirmHaptic() else view.lightHaptic() }
@@ -143,105 +148,167 @@ fun RoundCheck(
                 .size(size.dp)
                 .clip(CircleShape)
                 .background(fill)
-                .border(1.6.dp, if (enabled) color else color.copy(alpha = 0.4f), CircleShape),
+                .border(2.dp, if (enabled) color else color.copy(alpha = 0.35f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Filled.Check, contentDescription = null,
-                tint = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.size((size - 6).dp).scale(scale)
+                tint = Color.White,
+                modifier = Modifier.size((size - 8).dp).scale(scale)
             )
         }
     }
 }
 
 @Composable
-fun TagDot(color: Int, modifier: Modifier = Modifier, size: Int = 8) {
+fun TagDot(color: Int, modifier: Modifier = Modifier, size: Int = 10) {
     Box(modifier.size(size.dp).clip(CircleShape).background(Color(color)))
 }
 
+/** Bölüm başlığı: "GECİKEN", "BUGÜN 0/1" … */
 @Composable
-fun TaskRow(
+fun SectionHeader(title: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant, trailing: String? = null, action: (@Composable () -> Unit)? = null) {
+    Row(
+        modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp, top = 22.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title.uppercase(com.okan.ajanda.domain.TR), style = MaterialTheme.typography.labelSmall, color = color, modifier = Modifier.weight(1f))
+        trailing?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)) }
+        action?.invoke()
+    }
+}
+
+/** Beyaz, yuvarlatılmış kart; içindeki satırlar ince çizgilerle ayrılır. */
+@Composable
+fun SoftCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface),
+        content = content
+    )
+}
+
+@Composable
+fun CardDivider() {
+    HorizontalDivider(Modifier.padding(start = 72.dp, end = 20.dp), thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/**
+ * Kart içi görev satırı: [onay] Başlık ↻ ……… 31 Eki ● Etiket
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TaskLine(
     details: TaskWithDetails,
     onToggle: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     haptics: Boolean = true,
+    showDate: Boolean = false,
+    date: LocalDate? = details.task.dueDate,
     today: LocalDate = LocalDate.now(),
-    overrideDate: LocalDate? = null,
     toggleEnabled: Boolean = true,
+    onDelete: (() -> Unit)? = null,
+) {
+    val row: @Composable () -> Unit = {
+        TaskLineContent(details, onToggle, onClick, haptics, showDate, date, today, toggleEnabled)
+    }
+    if (onDelete == null) {
+        Box(modifier) { row() }
+        return
+    }
+    val state = rememberSwipeToDismissBoxState(confirmValueChange = {
+        if (it == SwipeToDismissBoxValue.EndToStart) { onDelete(); true } else false
+    })
+    SwipeToDismissBox(
+        state = state,
+        modifier = modifier,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.errorContainer).padding(end = 24.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) { Icon(Icons.Outlined.Delete, "Sil", tint = MaterialTheme.colorScheme.onErrorContainer) }
+        }
+    ) { row() }
+}
+
+@Composable
+private fun TaskLineContent(
+    details: TaskWithDetails,
+    onToggle: () -> Unit,
+    onClick: () -> Unit,
+    haptics: Boolean,
+    showDate: Boolean,
+    date: LocalDate?,
+    today: LocalDate,
+    toggleEnabled: Boolean,
 ) {
     val task = details.task
-    val accent = details.primaryColor?.let { Color(it) } ?: MaterialTheme.colorScheme.primary
-    val date = overrideDate ?: task.dueDate
+    val cs = MaterialTheme.colorScheme
+    val tag = details.tags.firstOrNull()
+    val accent = tag?.let { Color(it.color) } ?: cs.onSurfaceVariant
     val overdue = !task.isCompleted && date != null && date < today
     Row(
-        modifier = modifier
+        Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+            .background(cs.surface)
             .clickable(onClick = onClick)
-            .height(androidx.compose.foundation.layout.IntrinsicSize.Min),
+            .padding(start = 10.dp, end = 20.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Öncelik çubuğu
-        Box(
-            Modifier
-                .width(3.dp)
-                .fillMaxHeight()
-                .padding(vertical = 10.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(if (task.priority >= Priority.HIGH) priorityColor(task.priority) else Color.Transparent)
-        )
-        RoundCheck(task.isCompleted, onToggle, accent, Modifier.padding(start = 4.dp), haptics = haptics, enabled = toggleEnabled)
-        Column(
-            Modifier
-                .weight(1f)
-                .padding(top = 10.dp, bottom = 10.dp, end = 12.dp)
-        ) {
-            StrikeThroughText(task.title, task.isCompleted, MaterialTheme.typography.bodyLarge)
-            val meta = buildList {
-                DateText.due(date, task.dueTime, today)?.let { add(it) }
+        RoundCheck(task.isCompleted, onToggle, accent, haptics = haptics, enabled = toggleEnabled)
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (task.priority >= Priority.HIGH && !task.isCompleted) {
+                    Icon(Icons.Filled.Flag, "Öncelikli", Modifier.size(16.dp), tint = Color(0xFFD2453B))
+                    Spacer(Modifier.width(4.dp))
+                }
+                StrikeThroughText(task.title, task.isCompleted, MaterialTheme.typography.bodyLarge, Modifier.weight(1f, fill = false))
+                if (task.recurrence != Recurrence.NONE) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Filled.Repeat, null, Modifier.size(15.dp), tint = cs.onSurfaceVariant.copy(alpha = 0.7f))
+                }
             }
-            val subDone = details.subtasks.count { it.isDone }
-            val hasMeta = meta.isNotEmpty() || details.subtasks.isNotEmpty() || details.tags.isNotEmpty() ||
-                task.recurrence != Recurrence.NONE || task.reminderMinutesBefore != null
-            if (hasMeta) {
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    meta.forEach {
-                        Text(
-                            it, style = MaterialTheme.typography.labelMedium,
-                            color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+            val sub = buildList {
+                task.dueTime?.let { add(DateText.time(it)) }
+                if (details.subtasks.isNotEmpty()) add("${details.subtasks.count { it.isDone }}/${details.subtasks.size} alt görev")
+                if (task.notes.isNotBlank()) add(task.notes.lineSequence().first().take(40))
+            }
+            if (sub.isNotEmpty() || (task.reminderMinutesBefore != null && !task.isCompleted)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (task.reminderMinutesBefore != null && !task.isCompleted) {
-                        Icon(Icons.Outlined.Notifications, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Outlined.Notifications, null, Modifier.size(13.dp), tint = cs.onSurfaceVariant)
                     }
-                    if (task.recurrence != Recurrence.NONE) {
-                        Icon(Icons.Filled.Repeat, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (details.subtasks.isNotEmpty()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Checklist, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(
-                                " $subDone/${details.subtasks.size}", style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Spacer(Modifier.weight(1f))
-                    details.tags.take(4).forEach { tag ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            TagDot(tag.color)
-                            Text(
-                                " ${tag.name}", style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
-                            )
-                        }
-                    }
+                    Text(sub.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
+        Spacer(Modifier.width(10.dp))
+        if (showDate && date != null) {
+            Text(
+                DateText.relative(date, today),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                color = if (overdue) cs.error else cs.onSurfaceVariant
+            )
+            Spacer(Modifier.width(10.dp))
+        }
+        if (tag != null) {
+            TagDot(tag.color)
+            Text(
+                " ${tag.name}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 0.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun EmptyLine(text: String) {
+    Box(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 22.dp), contentAlignment = Alignment.CenterStart) {
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

@@ -1,5 +1,6 @@
 package com.okan.ajanda.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -20,10 +21,10 @@ enum class Priority(val level: Int, val label: String) {
 
 enum class Recurrence(val label: String, val unitLabel: String) {
     NONE("Tekrar yok", ""),
-    DAILY("Günlük", "gün"),
-    WEEKLY("Haftalık", "hafta"),
-    MONTHLY("Aylık", "ay"),
-    YEARLY("Yıllık", "yıl"),
+    DAILY("Her gün", "gün"),
+    WEEKLY("Her hafta", "hafta"),
+    MONTHLY("Her ay", "ay"),
+    YEARLY("Her yıl", "yıl"),
 }
 
 /**
@@ -46,6 +47,8 @@ data class TaskEntity(
     val recurrence: Recurrence = Recurrence.NONE,
     val recurrenceInterval: Int = 1,
     val recurrenceEndDate: LocalDate? = null,
+    /** Haftalık tekrarda seçili günler: bit0 = Pazartesi … bit6 = Pazar. 0 = başlangıç günü. */
+    @ColumnInfo(defaultValue = "0") val recurrenceDays: Int = 0,
     val isCompleted: Boolean = false,
     val completedAt: Instant? = null,
     val createdAt: Instant = Instant.now(),

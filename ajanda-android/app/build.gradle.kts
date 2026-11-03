@@ -13,11 +13,29 @@ android {
         applicationId = "com.okan.ajanda"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
+    // İmza anahtarı repoya konmaz. keystore/ajanda.keystore varsa onunla, yoksa varsayılan debug anahtarıyla imzalanır.
+    // Parolalar ortam değişkeninden okunur: AJANDA_STORE_PASSWORD / AJANDA_KEY_ALIAS / AJANDA_KEY_PASSWORD
+    val ajandaKeystore = rootProject.file("keystore/ajanda.keystore")
+    signingConfigs {
+        if (ajandaKeystore.exists()) {
+            create("ajanda") {
+                storeFile = ajandaKeystore
+                storePassword = System.getenv("AJANDA_STORE_PASSWORD") ?: "android"
+                keyAlias = System.getenv("AJANDA_KEY_ALIAS") ?: "androiddebugkey"
+                keyPassword = System.getenv("AJANDA_KEY_PASSWORD") ?: "android"
+            }
+        }
+    }
+    val releaseSigning = signingConfigs.findByName("ajanda") ?: signingConfigs.getByName("debug")
+
     buildTypes {
+        debug {
+            signingConfig = releaseSigning
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -25,9 +43,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Yan yükleme (sideload) için debug anahtarıyla imzalanır.
-            // Play Store'a yüklemeden önce kendi release keystore'unuzu tanımlayın.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = releaseSigning
         }
     }
     compileOptions {
@@ -39,6 +55,16 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.systemProperty("roborazzi.test.record", "true")
+                it.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2/")
+                it.maxHeapSize = "3g"
+            }
+        }
     }
 }
 
@@ -73,4 +99,11 @@ dependencies {
     implementation(libs.androidx.glance.material3)
 
     testImplementation(libs.junit)
+    // Ekran görüntüsü testleri (JVM üzerinde Compose çizimi)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

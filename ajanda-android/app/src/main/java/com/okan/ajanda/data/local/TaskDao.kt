@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
@@ -44,6 +45,12 @@ abstract class TaskDao {
 
     @Query("SELECT * FROM tasks WHERE isCompleted = 0 AND reminderMinutesBefore IS NOT NULL AND dueDate IS NOT NULL")
     abstract suspend fun getWithReminders(): List<TaskEntity>
+
+    @Query("SELECT * FROM tasks WHERE recurrence != 'NONE' AND isCompleted = 0 AND dueDate < :today")
+    abstract suspend fun getRecurringBefore(today: LocalDate): List<TaskEntity>
+
+    @Update
+    abstract suspend fun updateTask(task: TaskEntity)
 
     @Upsert
     abstract suspend fun upsertTask(task: TaskEntity): Long

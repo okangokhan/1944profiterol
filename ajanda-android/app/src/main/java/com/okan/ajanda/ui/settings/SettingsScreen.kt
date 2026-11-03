@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -67,16 +68,11 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel(factory = AppViewModelProvi
     Scaffold(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0),
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                title = { Text("Ayarlar", style = MaterialTheme.typography.headlineMedium) }
-            )
-        }
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp)
+            Modifier.fillMaxSize().padding(padding).statusBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 130.dp)
         ) {
+            com.okan.ajanda.ui.components.ScreenHeader(overline = "Görünüm, etiketler, bildirimler", title = "Ayarlar")
             Section("Tema")
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 ThemeMode.entries.forEachIndexed { i, m ->
@@ -149,7 +145,7 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel(factory = AppViewModelProvi
             Section("İpuçları")
             Text(
                 "• Hızlı ayarlar paneline “Hızlı Görev” kutucuğunu ekleyerek tek dokunuşla görev oluşturun.\n" +
-                    "• Ana ekrana “Haftalık Görevler” ve “Aylık Özet” widget'larını ekleyin.\n" +
+                    "• Ana ekrana “Haftalık Görevler”, “Son Tarihler” (eriyen çubuklar) ve “Aylık Özet” widget'larını ekleyin.\n" +
                     "• Uygulama simgesine uzun basarak sesli görev kısayolunu kullanın.\n" +
                     "• Sesli/yazılı komut örnekleri: “her pazartesi 9:30 haftalık toplantı #iş”, “15 kasım fatura öde önemli”.",
                 style = MaterialTheme.typography.bodyMedium,

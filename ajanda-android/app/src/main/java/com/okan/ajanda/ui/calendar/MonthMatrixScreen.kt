@@ -33,7 +33,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed as listItemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -87,7 +87,8 @@ import com.okan.ajanda.data.local.TaskOccurrence
 import com.okan.ajanda.domain.DateText
 import com.okan.ajanda.domain.TR
 import com.okan.ajanda.ui.AppViewModelProvider
-import com.okan.ajanda.ui.components.TaskRow
+import com.okan.ajanda.ui.components.CardDivider
+import com.okan.ajanda.ui.components.TaskLine
 import com.okan.ajanda.ui.components.lightHaptic
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -122,29 +123,16 @@ fun MonthMatrixScreen(
     ) {
         // Başlık
         Row(
-            Modifier.fillMaxWidth().padding(start = 20.dp, end = 4.dp, top = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 20.dp),
+            verticalAlignment = Alignment.Bottom
         ) {
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        DateText.monthName(state.month).uppercase(TR),
-                        style = MaterialTheme.typography.displaySmall,
-                        maxLines = 1
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "${state.month.year}",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                }
                 Text(
-                    "${state.monthTotal} görev · ${state.monthDone} tamamlandı",
-                    style = MaterialTheme.typography.labelMedium,
+                    "${state.month.year} · ${state.monthDone}/${state.monthTotal} tamamlandı",
+                    style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Text(DateText.monthName(state.month), style = MaterialTheme.typography.headlineLarge, maxLines = 1)
             }
             IconButton(onClick = vm::previous) { Icon(Icons.Filled.ChevronLeft, "Önceki ay") }
             IconButton(onClick = vm::goToday) { Icon(Icons.Outlined.Today, "Bugün") }
@@ -168,7 +156,7 @@ fun MonthMatrixScreen(
         Spacer(Modifier.height(12.dp))
 
         // Haftanın günleri başlığı
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             MonthMatrix.weekdays(state.mondayFirst).forEach { d ->
                 Text(
                     DateText.weekdayShort(d),
@@ -195,7 +183,7 @@ fun MonthMatrixScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
+                .padding(start = 16.dp, end = 16.dp, bottom = 104.dp)
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -235,13 +223,12 @@ private fun MonthGrid(
     onDayClick: (LocalDate) -> Unit,
     onDayLongClick: (LocalDate) -> Unit,
 ) {
-    val lineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+    val lineColor = MaterialTheme.colorScheme.outlineVariant
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(6.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-            .border(1.dp, lineColor, RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface)
     ) {
         val rows = (state.days.size / 7).coerceAtLeast(1)
         val cellHeight: Dp = maxHeight / rows
@@ -294,7 +281,7 @@ private fun DayCell(
                 if (drawRight) drawLine(lineColor, Offset(size.width, 0f), Offset(size.width, size.height), w)
                 if (drawBottom) drawLine(lineColor, Offset(0f, size.height), Offset(size.width, size.height), w)
             }
-            .background(if (inMonth) Color.Transparent else cs.onSurface.copy(alpha = 0.035f))
+            .background(if (inMonth) Color.Transparent else cs.surfaceContainerLow)
             .padding(3.dp)
     ) {
         Box(
@@ -361,6 +348,7 @@ private fun TaskLabel(occ: TaskOccurrence, height: Dp) {
             fontSize = 9.sp,
             lineHeight = 10.sp,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Clip,
             color = cs.onSurface.copy(alpha = if (done) 0.45f else if (occ.isVirtual) 0.7f else 1f),
             textDecoration = if (done) TextDecoration.LineThrough else null,
@@ -382,7 +370,11 @@ private fun DaySheet(
     onDetailedAdd: () -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+        containerColor = MaterialTheme.colorScheme.background,
+    ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).navigationBarsPadding()) {
             Text(DateText.full(day), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 4.dp))
             Text(
@@ -392,19 +384,21 @@ private fun DaySheet(
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
             Spacer(Modifier.height(12.dp))
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f, fill = false)
-            ) {
-                items(items, key = { "${it.task.id}_${it.date}" }) { occ ->
-                    TaskRow(
-                        details = occ.details,
-                        onToggle = { onToggle(occ) },
-                        onClick = { onOpenTask(occ.task.id) },
-                        haptics = haptics,
-                        overrideDate = occ.date,
-                        toggleEnabled = !occ.isVirtual,
-                    )
+            if (items.isNotEmpty()) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false).clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surface)
+                ) {
+                    listItemsIndexed(items, key = { _, it -> "${it.task.id}_${it.date}" }) { i, occ ->
+                        if (i > 0) CardDivider()
+                        TaskLine(
+                            details = occ.details,
+                            onToggle = { onToggle(occ) },
+                            onClick = { onOpenTask(occ.task.id) },
+                            haptics = haptics,
+                            date = occ.date,
+                            toggleEnabled = !occ.isVirtual,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))

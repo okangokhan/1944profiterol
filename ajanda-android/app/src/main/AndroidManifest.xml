@@ -73,6 +73,18 @@
                 android:resource="@xml/widget_month_info" />
         </receiver>
 
+        <receiver
+            android:name=".widget.DeadlineWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_deadline_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_deadline_info" />
+        </receiver>
+
         <!-- Hızlı Ayarlar kutucuğu -->
         <service
             android:name=".tile.QuickAddTileService"

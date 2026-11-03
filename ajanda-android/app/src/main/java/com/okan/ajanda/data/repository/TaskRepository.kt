@@ -53,6 +53,34 @@ class TaskRepository(
             )
         }
 
+    fun observeOverdue(today: LocalDate = LocalDate.now()): Flow<List<TaskWithDetails>> = taskDao.observeOverdue(today)
+
+    /** Eriyen çubuklar için: gecikmiş + önümüzdeki [days] gün içindeki bitmemiş tarihli görevler, son tarihe göre sıralı. */
+    fun observeDeadlines(today: LocalDate = LocalDate.now(), days: Long = 13): Flow<List<TaskWithDetails>> =
+        combine(taskDao.observeOverdue(today), taskDao.observeBetween(today, today.plusDays(days))) { overdue, upcoming ->
+            (overdue + upcoming.filter { !it.task.isCompleted })
+                .distinctBy { it.task.id }
+                .sortedWith(compareBy({ it.task.dueDate }, { it.task.dueTime ?: java.time.LocalTime.MAX }))
+        }
+
+    /**
+     * Rutinler "gecikmiş" görünmesin: süresi geçmiş tekrarlanan görevleri bugüne/sonraki tekrara taşır.
+     * Uygulama açılışında ve widget güncellemesinde çağrılır.
+     */
+    suspend fun rollOverRecurring(today: LocalDate = LocalDate.now()) {
+        val list = taskDao.getRecurringBefore(today)
+        list.forEach { t ->
+            var d = t.dueDate ?: return@forEach
+            var guard = 0
+            while (d < today && guard++ < 2000) d = RecurrenceCalculator.next(d, t)
+            if (t.recurrenceEndDate != null && d > t.recurrenceEndDate) return@forEach
+            val updated = t.copy(dueDate = d)
+            taskDao.updateTask(updated)
+            scheduler.schedule(updated)
+        }
+        if (list.isNotEmpty()) refreshWidgets()
+    }
+
     fun observeWeek(today: LocalDate = LocalDate.now()): Flow<WeekData> {
         val end = today.plusDays(6)
         return combine(taskDao.observeOverdue(today), observeRange(today, end)) { overdue, occ ->
@@ -110,11 +138,11 @@ class TaskRepository(
                     task.copy(isCompleted = true, completedAt = Instant.now(), recurrence = Recurrence.NONE),
                     d.sortedSubtasks, d.tags.map { it.id }
                 )
-                var next = RecurrenceCalculator.next(due, task.recurrence, task.recurrenceInterval)
+                var next = RecurrenceCalculator.next(due, task)
                 // Gecikmiş döngüleri bugüne yetiştir
                 val today = LocalDate.now()
                 var guard = 0
-                while (next < today && guard++ < 1000) next = RecurrenceCalculator.next(next, task.recurrence, task.recurrenceInterval)
+                while (next < today && guard++ < 2000) next = RecurrenceCalculator.next(next, task)
                 if (task.recurrenceEndDate == null || next <= task.recurrenceEndDate) {
                     val nextTask = task.copy(id = 0, dueDate = next, isCompleted = false, completedAt = null, createdAt = Instant.now())
                     val newId = taskDao.saveFull(nextTask, d.sortedSubtasks.map { it.copy(isDone = false) }, d.tags.map { it.id })

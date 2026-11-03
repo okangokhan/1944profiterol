@@ -5,6 +5,8 @@
     <string name="widget_weekly_desc">Bu haftanın görevleri; doğrudan işaretleyerek tamamlayın.</string>
     <string name="widget_month_name">Aylık Özet</string>
     <string name="widget_month_desc">Ayın matris görünümü ve görev özeti.</string>
+    <string name="widget_deadline_name">Son Tarihler</string>
+    <string name="widget_deadline_desc">Eriyen çubuklarla yaklaşan son tarihler.</string>
     <string name="tile_label">Hızlı Görev</string>
     <string name="shortcut_add_short">Yeni görev</string>
     <string name="shortcut_voice_short">Sesli görev</string>

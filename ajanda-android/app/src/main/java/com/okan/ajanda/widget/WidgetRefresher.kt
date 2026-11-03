@@ -7,5 +7,6 @@ object WidgetRefresher {
     suspend fun refreshAll(context: Context) {
         runCatching { WeeklyTaskWidget().updateAll(context) }
         runCatching { MonthSummaryWidget().updateAll(context) }
+        runCatching { DeadlineWidget().updateAll(context) }
     }
 }

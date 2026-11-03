@@ -14,9 +14,9 @@ enum class PaperStyle(val label: String) { PLAIN("Düz"), LINED("Çizgili"), GRI
 
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val paperStyle: PaperStyle = PaperStyle.DOTTED,
+    val paperStyle: PaperStyle = PaperStyle.PLAIN,
     val dynamicColor: Boolean = false,
-    val weekStartsMonday: Boolean = false,
+    val weekStartsMonday: Boolean = true,
     val haptics: Boolean = true,
 )
 
@@ -34,9 +34,9 @@ class SettingsRepository(private val context: Context) {
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
         AppSettings(
             themeMode = p[Keys.theme]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
-            paperStyle = p[Keys.paper]?.let { runCatching { PaperStyle.valueOf(it) }.getOrNull() } ?: PaperStyle.DOTTED,
+            paperStyle = p[Keys.paper]?.let { runCatching { PaperStyle.valueOf(it) }.getOrNull() } ?: PaperStyle.PLAIN,
             dynamicColor = p[Keys.dynamic] ?: false,
-            weekStartsMonday = p[Keys.monday] ?: false,
+            weekStartsMonday = p[Keys.monday] ?: true,
             haptics = p[Keys.haptics] ?: true,
         )
     }

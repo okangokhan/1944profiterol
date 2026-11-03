@@ -82,4 +82,28 @@ class VoiceCommandParserTest {
         assertEquals(0, days.size % 7)
         assertTrue(days.contains(LocalDate.of(2026, 11, 30)))
     }
+
+    @Test fun weeklyWithSelectedDays() {
+        // 27.10.2026 Salı başlangıç, Salı + Perşembe
+        val mask = RecurrenceCalculator.bit(DayOfWeek.TUESDAY) or RecurrenceCalculator.bit(DayOfWeek.THURSDAY)
+        val t = TaskEntity(title = "LGS", dueDate = LocalDate.of(2026, 10, 27), recurrence = Recurrence.WEEKLY, recurrenceDays = mask,
+            recurrenceEndDate = LocalDate.of(2027, 6, 30))
+        assertEquals(LocalDate.of(2026, 10, 29), RecurrenceCalculator.next(LocalDate.of(2026, 10, 27), t))
+        assertEquals(LocalDate.of(2026, 11, 3), RecurrenceCalculator.next(LocalDate.of(2026, 10, 29), t))
+        val occ = RecurrenceCalculator.occurrencesBetween(t, LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 8))
+        assertEquals(listOf(LocalDate.of(2026, 11, 3), LocalDate.of(2026, 11, 5)), occ)
+    }
+
+    @Test fun meltingBarShrinksTowardDeadline() {
+        val created = java.time.LocalDateTime.of(2026, 11, 1, 0, 0)
+        val zone = java.time.ZoneId.systemDefault()
+        val t = TaskEntity(title = "rapor", dueDate = LocalDate.of(2026, 11, 5), dueTime = LocalTime.of(0, 0),
+            createdAt = created.atZone(zone).toInstant())
+        val mid = com.okan.ajanda.domain.Deadline.info(t, java.time.LocalDateTime.of(2026, 11, 1, 12, 0))!!
+        assertEquals(0.5f, mid.fraction, 0.01f) // 3.5 gün kaldı / 7 gün
+        assertEquals(com.okan.ajanda.domain.Urgency.CALM, mid.urgency)
+        val late = com.okan.ajanda.domain.Deadline.info(t, java.time.LocalDateTime.of(2026, 11, 6, 12, 0))!!
+        assertEquals(0f, late.fraction, 0.001f)
+        assertEquals("1 gün gecikti", late.label)
+    }
 }

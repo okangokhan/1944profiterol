@@ -11,6 +11,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.okan.ajanda.data.prefs.AppSettings
 import com.okan.ajanda.ui.AjandaRoot
 import com.okan.ajanda.ui.LaunchAction
@@ -39,6 +41,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Süresi geçmiş rutinleri bugüne taşı
+        lifecycleScope.launch { container.taskRepository.rollOverRecurring() }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
@@ -50,6 +58,7 @@ class MainActivity : ComponentActivity() {
             intent.action == ACTION_QUICK_ADD -> LaunchAction.QuickAdd(voice = false)
             intent.action == ACTION_VOICE_ADD -> LaunchAction.QuickAdd(voice = true)
             intent.action == ACTION_OPEN_CALENDAR -> LaunchAction.OpenCalendar
+            intent.action == ACTION_OPEN_WEEK -> LaunchAction.OpenWeek
             intent.hasExtra(EXTRA_TASK_ID) -> LaunchAction.OpenTask(intent.getLongExtra(EXTRA_TASK_ID, 0L))
             else -> launchActions.value
         }
@@ -59,6 +68,7 @@ class MainActivity : ComponentActivity() {
         const val ACTION_QUICK_ADD = "com.okan.ajanda.QUICK_ADD"
         const val ACTION_VOICE_ADD = "com.okan.ajanda.VOICE_ADD"
         const val ACTION_OPEN_CALENDAR = "com.okan.ajanda.OPEN_CALENDAR"
+        const val ACTION_OPEN_WEEK = "com.okan.ajanda.OPEN_WEEK"
         const val EXTRA_TASK_ID = "taskId"
 
         fun quickAddIntent(context: Context, voice: Boolean = false): Intent =
@@ -71,6 +81,11 @@ class MainActivity : ComponentActivity() {
                 .setAction(Intent.ACTION_VIEW)
                 .setData(Uri.parse("ajanda://task/$id"))
                 .putExtra(EXTRA_TASK_ID, id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
+        fun openWeekIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java)
+                .setAction(ACTION_OPEN_WEEK)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
         fun openCalendarIntent(context: Context): Intent =

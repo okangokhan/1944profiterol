@@ -61,6 +61,7 @@ class WeeklyTaskWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val repo = context.container.taskRepository
         val flow = repo.observeWeek(LocalDate.now())
+        repo.rollOverRecurring()
         val initial = flow.first()
         provideContent {
             val data by remember { flow }.collectAsState(initial)
@@ -100,11 +101,11 @@ private fun WeeklyContent(data: WeekData) {
         GlanceModifier
             .fillMaxSize()
             .cornerRadius(20.dp)
-            .background(GlanceTheme.colors.widgetBackground)
+            .background(GlanceTheme.colors.background)
             .padding(12.dp)
     ) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(GlanceModifier.defaultWeight().clickable(actionStartActivity(MainActivity.openCalendarIntent(context)))) {
+            Column(GlanceModifier.defaultWeight().clickable(actionStartActivity(MainActivity.openWeekIntent(context)))) {
                 Text("Bu Hafta", style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface))
                 if (!compact) {
                     val end = data.today.plusDays(6)
